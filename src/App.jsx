@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import useGameStore from './store/gameStore.js';
 import MainMenu from './components/UI/MainMenu.jsx';
 import GameBoard from './components/GameBoard/GameBoard.jsx';
@@ -18,6 +19,7 @@ export default function App() {
       {gameMode === 'menu' && <MainMenu />}
       {gameMode === 'game' && <GameBoard />}
       {gameMode === 'deckbuilder' && <DeckBuilder />}
+      <Analytics />
     </div>
   );
 }
