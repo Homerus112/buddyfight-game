@@ -9,6 +9,7 @@ import {
 } from '../engine/GameEngine.js';
 import { runAITurn, setAIDifficulty, getAIDifficulty } from '../engine/AIEngine.js';
 import { parseSpellEffect } from '../engine/CostSystem.js';
+import { applyEnterEffect } from '../engine/MonsterEffects.js';
 import { TURN_PHASE } from '../utils/constants.js';
 import { recordGame } from '../utils/gameStats.js';
 
@@ -261,7 +262,7 @@ const useGameStore = create((set, get) => ({
     set({ gameState: ns, pendingActChoice: null });
   },
   clearActChoice: () => set({ pendingActChoice: null }),
-  resolveChooseEnter: async (chosenEffect) => {
+  resolveChooseEnter: (chosenEffect) => {
     const { gameState } = get();
     if (!gameState?._pendingChooseEnter) return;
     const { card } = gameState._pendingChooseEnter;
@@ -271,8 +272,6 @@ const useGameStore = create((set, get) => ({
       _chosenEnterEffect: chosenEffect || undefined,
       _pendingChooseEnter: undefined,
     };
-    // Dynamic import로 순환 참조 방지
-    const { applyEnterEffect } = await import('../engine/MonsterEffects.js');
     const ns = applyEnterEffect(stateWithChoice, card, ap);
     set({ gameState: ns });
   },
