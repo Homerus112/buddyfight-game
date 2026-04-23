@@ -109,7 +109,61 @@ export function doStandPhase(state) {
     // setZone은 세트 카드가 제거될 때까지 유지 (리셋 안 함)
     log: [...state.log, L(`[${ap==='player'?'나':'AI'}] ① 스탠드`,`[${ap==='player'?'Me':'AI'}] ① Stand`)],
   };
-  return evaluateConditionalKeywords(_standResult);
+  // ── [Cont] 지속 효과 적용 ─────────────────────────────
+  // 필드의 모든 카드를 순회하며 Cont 효과(필드 버프)를 적용
+  let contResult = { ..._standResult };
+  const contAp = contResult.activePlayer;
+  const contSides = ['player', 'ai'];
+  for (const side of contSides) {
+    const sideP = contResult[side];
+    let newFieldCont = { ...sideP.field };
+    // 각 카드의 [Cont] 효과 적용
+    for (const srcZone of ['left','center','right']) {
+      const srcCard = sideP.field[srcZone];
+      if (!srcCard) continue;
+      const txt = srcCard.text || '';
+      if (!/\[Cont\]/i.test(txt)) continue;
+      // "All «TRIBE» on your field get power+N" 패턴
+      const tribeBuffM = txt.match(/[Aa]ll\s+«([^»]+)»\s+(?:monsters?\s+)?on\s+your\s+field.*?get\s+power\+(\d+)/i);
+      if (tribeBuffM) {
+        const tribe = tribeBuffM[1].toLowerCase();
+        const buffPow = parseInt(tribeBuffM[2]);
+        const defBuffM = txt.match(/defense\+(\d+)/i);
+        const buffDef = defBuffM ? parseInt(defBuffM[1]) : 0;
+        for (const tz of ['left','center','right']) {
+          const tc = newFieldCont[tz];
+          if (!tc) continue;
+          const tcTribe = (tc.tribe||'').toLowerCase();
+          if (tcTribe.includes(tribe) || tribe.includes(tcTribe.split('/')[0])) {
+            newFieldCont[tz] = {
+              ...tc,
+              power: (tc._basePower ?? tc.power) + buffPow,
+              defense: (tc._origDefense ?? tc.defense) + buffDef,
+              _basePower: tc._basePower ?? tc.power,
+              _contBuffFrom: srcCard.name,
+            };
+          }
+        }
+      }
+      // "All monsters on your field get power+N" (종족 무관)
+      const allBuffM = txt.match(/[Aa]ll\s+monsters?\s+on\s+your\s+field\s+get\s+power\+(\d+)/i);
+      if (allBuffM && !tribeBuffM) {
+        const buffPow2 = parseInt(allBuffM[1]);
+        for (const tz of ['left','center','right']) {
+          const tc = newFieldCont[tz];
+          if (!tc) continue;
+          newFieldCont[tz] = {
+            ...tc,
+            power: (tc._basePower ?? tc.power) + buffPow2,
+            _basePower: tc._basePower ?? tc.power,
+            _contBuffFrom: srcCard.name,
+          };
+        }
+      }
+    }
+    contResult = { ...contResult, [side]: { ...sideP, field: newFieldCont } };
+  }
+  return evaluateConditionalKeywords(contResult);
 }
 
 export function doDrawPhase(state) {
@@ -430,17 +484,17 @@ export function resolveAttack(state, targetZone) {
         p_def.drop = [...p_def.drop, defender];
         // [Set] 파괴 불가 체크
       const defTribe = (defender.tribe||'').toLowerCase();
-      const indestrTribe = defP._setIndestructible;
+      const indestrTribe = p_def._setIndestructible;
       if (indestrTribe && (indestrTribe === 'all' || defTribe.includes(indestrTribe))) {
         logs.push(`🛡️ [Set] 파괴 불가! (${defender.name})`);
         // 파괴 취소
         newField[defZone] = defender;
-        defP = { ...defP, field: newField };
+        p_def = { ...p_def, field: newField };
       } else {
         logs.push(L(`💀 ${defender.name} 파괴!`,`💀 ${defender.name} destroyed!`));
         // [Set] 파괴 시 차지
-        if (defP._setGaugeOnDestroy && defP.deck.length > 0) {
-          defP = { ...defP, gauge: [...defP.gauge, defP.deck[0]], deck: defP.deck.slice(1) };
+        if (p_def._setGaugeOnDestroy && p_def.deck.length > 0) {
+          p_def = { ...p_def, gauge: [...p_def.gauge, p_def.deck[0]], deck: p_def.deck.slice(1) };
           logs.push(`⚡ [Set] 파괴 차지`);
         }
       }
@@ -956,6 +1010,15 @@ export function castSpell(state, instanceId) {
       logs.push(`✨ ${effect.thisTurnKeyword} 부여`);
     }
     // Then, if 조건부 추가 효과
+    // Then, if your life is N or less → 추가 차지
+    if (effect.conditionalLifeGauge) {
+      const { maxLife, n } = effect.conditionalLifeGauge;
+      if (updatedP.life <= maxLife && updatedP.deck.length > 0) {
+        const _gn = Math.min(n, updatedP.deck.length);
+        updatedP = { ...updatedP, gauge: [...updatedP.gauge, ...updatedP.deck.slice(0,_gn)], deck: updatedP.deck.slice(_gn) };
+        logs.push(`⚡ 조건부 차지 ${_gn}장 (라이프 ${maxLife} 이하)`);
+      }
+    }
     if (effect.conditionalFieldMonster) {
       const kw = effect.conditionalFieldMonster.toLowerCase();
       const hasIt = Object.values(updatedP.field).some(c => c && (c.name||'').toLowerCase().includes(kw));

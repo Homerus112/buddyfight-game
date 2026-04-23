@@ -1089,6 +1089,35 @@ export function applyActEffect(state, card, zone, ownerSide) {
     }
   }
 
+  // 드롭에서 소환 (Act: "Call up to one X from your drop zone")
+  if (effect.callFromDrop) {
+    const dropTxt = (text||'').toLowerCase();
+    const sizeNumM = dropTxt.match(/size\s+(\d+)/i);
+    const nameKwM = (text||'').match(/with\s+"([^"]+)"\s+in\s+its\s+card\s+name/i);
+    const sizeFilter = sizeNumM ? parseInt(sizeNumM[1]) : null;
+    const nameFilter = nameKwM ? nameKwM[1].toLowerCase() : null;
+    const candidates = p.drop.filter(c => {
+      if (c.type !== 1) return false;
+      if (sizeFilter !== null && (c.size??0) !== sizeFilter) return false;
+      if (nameFilter && !(c.name||'').toLowerCase().includes(nameFilter)) return false;
+      return true;
+    });
+    if (candidates.length > 0) {
+      const monster = candidates[candidates.length - 1];
+      const emptyZones = ['left','center','right'].filter(z => !p.field[z]);
+      if (emptyZones.length > 0) {
+        const targetZone = emptyZones[0];
+        p = { ...p,
+          field: { ...p.field, [targetZone]: { ...monster, state: 'stand', soul: [] } },
+          drop: p.drop.filter(c => c.instanceId !== monster.instanceId),
+        };
+        logs.push(`📤 [Act] ${monster.name} 드롭→필드(${targetZone})`);
+      } else { logs.push(`❌ 빈 존 없음`); }
+    } else {
+      logs.push(`❌ 드롭에 대상 카드 없음${nameFilter?` ("${nameFilter}")`:''}${sizeFilter?` size${sizeFilter}`:''}`);
+    }
+  }
+
   // once per turn 체크 (actOncePT 재선언)
   const actOncePT = /you may only use "[^"]*" once per turn/i.test(text);
   const _actUsed = { ...(state._usedThisTurn||{}) };

@@ -189,10 +189,10 @@ export function parseSpellEffect(text = '') {
   const counterM = text.match(/\[Counter\]\s*([\s\S]+)/i);
   const overturnM = text.match(/\[Overturn\]\s*(?:\[[^\]]+\]\s*)?([\s\S]+)/i);
   const effectText = counterM ? counterM[1] : (overturnM ? overturnM[1] : text);
+  const effect = {};
   if (counterM) effect.isCounter = true;
   if (overturnM) effect.isOverturn = true;
   const t = effectText.toLowerCase();
-  const effect = {};
 
   // ── 공격 무효화 ──
   if (/nullify\s+(?:the|that|this|an?)\s+attack/i.test(effectText)) effect.nullifyAttack = true;
@@ -284,6 +284,15 @@ export function parseSpellEffect(text = '') {
   const battleTargetM = effectText.match(/[Cc]hoose (?:a|an)\s+[«\"]([^»\"]+)[»\"]\s+in\s+battle/i);
   if (battleTargetM) effect.battleTarget = battleTargetM[1].trim();
 
+  // Then, if your life is N or less → 추가 차지
+  const thenIfLifeGaugeM = effectText.match(/[Tt]hen[,.]?\s+if\s+your\s+life\s+is\s+(\d+)\s+or\s+less[,.]?\s+put\s+the\s+top\s+(\w+|\d+)\s+cards?\s+(?:of\s+your\s+deck\s+)?into\s+(?:your\s+)?gauge/i);
+  if (thenIfLifeGaugeM) {
+    const _nMap = {one:1,two:2,three:3,four:4,five:5,six:6};
+    effect.conditionalLifeGauge = {
+      maxLife: parseInt(thenIfLifeGaugeM[1]),
+      n: _nMap[thenIfLifeGaugeM[2]?.toLowerCase()] ?? parseInt(thenIfLifeGaugeM[2]) ?? 1,
+    };
+  }
   // Then, if [조건] → 조건부 추가 효과
   const thenIfM = effectText.match(/[Tt]hen[,.]?\s+if\s+you have (?:a|an)\s+[«\"]?([^»\",]+)[»\"]?\s+on\s+your\s+field[,.]?\s+(.*?)(?=\n|$)/i);
   if (thenIfM) {

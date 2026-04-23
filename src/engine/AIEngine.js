@@ -17,28 +17,28 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const DIFF = {
   easy: {
-    sleepMs: 600,
+    sleepMs: 1200,
     spellUse: false, actUse: false, setSpellUse: false,
     linkAtk: false, optimal: false, attackAll: false,
     counterUse: false, chargeOptimal: false, itemEquipBest: false,
     maxSpells: 0, maxAct: 0,
   },
   normal: {
-    sleepMs: 350,
+    sleepMs: 900,
     spellUse: true, actUse: false, setSpellUse: true,
     linkAtk: false, optimal: false, attackAll: true,
     counterUse: true, chargeOptimal: true, itemEquipBest: false,
     maxSpells: 1, maxAct: 0,
   },
   hard: {
-    sleepMs: 200,
+    sleepMs: 600,
     spellUse: true, actUse: true, setSpellUse: true,
     linkAtk: true, optimal: true, attackAll: true,
     counterUse: true, chargeOptimal: true, itemEquipBest: true,
     maxSpells: 2, maxAct: 2,
   },
   disaster: {
-    sleepMs: 80,
+    sleepMs: 300,
     spellUse: true, actUse: true, setSpellUse: true,
     linkAtk: true, optimal: true, attackAll: true,
     counterUse: true, chargeOptimal: true, itemEquipBest: true,
