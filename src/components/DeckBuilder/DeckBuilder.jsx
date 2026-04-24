@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { bgmToggle, bgmNext, bgmSubscribe } from '../../hooks/useBGM.js';
 import { t as i18nT } from '../../i18n/useI18n.js';
 import useGameStore from '../../store/gameStore.js';
-import { getCardsCache, getDecksCache } from '../../App.jsx';
+import { getCardsCache, getDecksCache } from '../../store/cardCache.js';
 
 import Card from '../Card/Card.jsx';
 import { CARD_TYPE, CARD_TYPE_NAME } from '../../utils/constants.js';

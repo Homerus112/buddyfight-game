@@ -4,10 +4,12 @@ import StatsModal from './StatsModal.jsx';
 import { recordGame } from '../../utils/gameStats.js';
 import useGameStore from '../../store/gameStore.js';
 import { bgmToggle, bgmNext, bgmSubscribe, bgmSetPlaylist, BGM_TRACKS } from '../../hooks/useBGM.js';
-import allCards from '../../data/cards.json';
-import prebuiltDecks from '../../data/prebuilt_decks.json';
+import { getCardsCache, getDecksCache } from '../../store/cardCache.js';
+
 import { CARD_TYPE } from '../../utils/constants.js';
 
+const allCards = getCardsCache() || [];
+const prebuiltDecks = getDecksCache() || {};
 const cardMap = Object.fromEntries(allCards.map(c => [c.id, c]));
 
 // 월드 이름 매핑
