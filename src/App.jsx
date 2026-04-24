@@ -5,7 +5,7 @@ import GameBoard from './components/GameBoard/GameBoard.jsx';
 import DeckBuilder from './components/DeckBuilder/DeckBuilder.jsx';
 import { bgmAutoStart } from './hooks/useBGM.js';
 
-import { setCardsCache, setDecksCache } from './store/cardCache.js';
+import { getCardsCache, setCardsCache, setDecksCache } from './store/cardCache.js';
 
 export default function App() {
   const { gameMode, loadSavedGame } = useGameStore();
@@ -17,7 +17,7 @@ export default function App() {
     document.addEventListener('click', handler);
 
     // 카드 데이터 fetch (번들 분리로 초기 로딩 속도 향상)
-    if (_cardsCache) { setDataLoaded(true); return; }
+    if (getCardsCache()) { setDataLoaded(true); return; }
     Promise.all([
       fetch('/cards.json').then(r => r.json()),
       fetch('/prebuilt_decks.json').then(r => r.json()).catch(() => ({})),
