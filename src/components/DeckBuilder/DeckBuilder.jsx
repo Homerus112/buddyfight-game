@@ -8,8 +8,7 @@ import Card from '../Card/Card.jsx';
 import { CARD_TYPE, CARD_TYPE_NAME } from '../../utils/constants.js';
 
 const WORLD_NAMES = {1:'Katana',2:'Danger',3:'Magic',4:'Dungeon',5:'Legend',6:'Dragon',7:'Ancient',8:'Generic',9:'Darkness Dragon',10:'Hero',11:'Star Dragon'};
-const cardMap = Object.fromEntries(allCards.map(c=>[c.id,c]));
-const flagCards = allCards.filter(c=>c.type===CARD_TYPE.FLAG);
+// allCards/cardMap/flagCards는 컴포넌트 내부에서 getCardsCache()로 초기화
 
 // localStorage에 덱 저장/불러오기
 const SAVE_KEY = 'bf_saved_decks';
@@ -30,6 +29,10 @@ function deleteDeckFromStorage(name) {
 export default function DeckBuilder() {
   const { goToMenu, startGame, setGameMode, aiDifficulty, setAIDifficulty, lang } = useGameStore();
   const T = (ko, en) => (lang||'ko') === 'ko' ? ko : (en||ko);
+  // 카드 데이터 (비동기 로딩 후 사용 가능)
+  const allCards = getCardsCache() || [];
+  const cardMap = Object.fromEntries(allCards.map(c => [c.id, c]));
+  const flagCards = allCards.filter(c => c.type === CARD_TYPE.FLAG);
   const [search, setSearch] = useState('');
   const [filterWorld, setFilterWorld] = useState('');
   const [filterType, setFilterType] = useState('');

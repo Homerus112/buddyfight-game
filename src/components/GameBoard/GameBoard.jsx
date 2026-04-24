@@ -453,6 +453,7 @@ export default function GameBoard() {
   const [tossShown, setTossShown] = useState(false);
   const [spellPopup, setSpellPopup] = useState(null);
   const [cardDetailPopup, setCardDetailPopup] = useState(null);
+  const [showRules, setShowRules] = useState(false);
   const [showTutorial, setShowTutorial] = useState(() => {
     try { return !localStorage.getItem('bf_tutorial_shown'); } catch { return true; }
   }); // 카드 상세보기 (드롭/소울)
@@ -696,6 +697,32 @@ export default function GameBoard() {
           </div>
         </div>
       )}
+      {/* 미니 규칙북 */}
+      {showRules && (
+        <div onClick={()=>setShowRules(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:400}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'#1a1a2e',borderRadius:14,border:'1px solid rgba(255,215,0,0.3)',padding:'20px 24px',maxWidth:480,width:'92%',maxHeight:'80vh',overflowY:'auto'}}>
+            <div style={{fontSize:16,fontWeight:'bold',color:'#ffd700',marginBottom:14}}>📖 {T('게임 규칙','Game Rules')}</div>
+            {[
+              ['⚔️ ' + T('기본 흐름','Basic Flow'), T('Stand → Draw → Charge → Main → Attack → Final → End 순으로 진행','Stand → Draw → Charge → Main → Attack → Final → End')],
+              ['🛡️ Counter', T('상대 턴 공격 시 [Counter] 스펠 발동 가능. 팝업에서 선택하거나 패스.','During opponent attack, Counter spells can be cast. Choose or pass.')],
+              ['🔗 ' + T('링크어택','Link Attack'), T('링크어택 버튼 활성화 후 추가 공격자 선택. 합산 파워로 공격.','Enable Link Attack, select additional attackers. Combined power attacks.')],
+              ['💎 Soulguard', T('공격받아 파괴 시 소울 1장 버리면 생존. 소울 없으면 파괴.','Discard 1 soul when destroyed to survive. Destroyed if no soul.')],
+              ['🌟 Buddy Call', T('버디 카드를 덱에서 콜하면 라이프 +1. 라이프 10 초과 불가.','Calling buddy from deck gives +1 life. Max 10 life.')],
+              ['👊 Penetrate', T('공격 성공 시 크리티컬만큼 추가 데미지.','Deal additional damage equal to critical after a successful attack.')],
+              ['🎭 Act', T('필드 카드 더블클릭으로 Act 효과 발동.','Double-click field card to activate Act effect.')],
+              ['📌 Set', T('스펠을 세트존에 내려 지속 효과 발동. 스펠 비용 필요.','Place spell in Set zone for continuous effect.')],
+            ].map(([title, desc], i) => (
+              <div key={i} style={{marginBottom:10,borderBottom:'1px solid rgba(255,255,255,0.06)',paddingBottom:8}}>
+                <div style={{fontSize:12,fontWeight:'bold',color:'#a29bfe',marginBottom:3}}>{title}</div>
+                <div style={{fontSize:11,color:'#ccc',lineHeight:1.5}}>{desc}</div>
+              </div>
+            ))}
+            <button onClick={()=>setShowRules(false)} style={{width:'100%',background:'rgba(255,255,255,0.07)',color:'#aaa',border:'none',borderRadius:8,padding:'8px',cursor:'pointer',fontSize:12,marginTop:4}}>
+              {T('닫기','Close')}
+            </button>
+          </div>
+        </div>
+      )}
       {/* 첫 판 튜토리얼 */}
       {showTutorial && gameState?.turn === 1 && gameState?.activePlayer === 'player' && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.88)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:400}}>
@@ -724,7 +751,18 @@ export default function GameBoard() {
           <div style={{fontSize:32,fontWeight:'bold',color:winner==='player'?'#ffd700':'#ff4444',marginBottom:24,letterSpacing:2}}>
             {winner==='player'?T('승리! 🏆','VICTORY!'):T('패배','DEFEAT')}
           </div>
-          <button onClick={goToMenu} style={{background:'linear-gradient(135deg,#b8860b,#ffd700)',color:'#000',fontWeight:'bold',border:'none',borderRadius:10,padding:'14px 40px',fontSize:18,cursor:'pointer'}}>메뉴로</button>
+          <div style={{display:'flex',gap:12,flexWrap:'wrap',justifyContent:'center'}}>
+            <button onClick={() => {
+              // 같은 설정으로 재대전
+reMatch ? reMatch() : goToMenu();
+            }} style={{background:'linear-gradient(135deg,#e17055,#d63031)',color:'#fff',
+              border:'none',borderRadius:10,padding:'12px 28px',fontSize:15,fontWeight:'bold',cursor:'pointer'}}>
+              {T('🔄 재대전','🔄 Rematch')}
+            </button>
+            <button onClick={goToMenu} style={{background:'linear-gradient(135deg,#b8860b,#ffd700)',color:'#000',fontWeight:'bold',border:'none',borderRadius:10,padding:'12px 28px',fontSize:15,cursor:'pointer'}}>
+              {T('🏠 메뉴로','🏠 Menu')}
+            </button>
+          </div>
         </div>
       )}
 
@@ -974,7 +1012,7 @@ export default function GameBoard() {
             padding:'4px 8px', display:'flex', gap:5, flexWrap:'wrap', justifyContent:'center', flexShrink:0,
           }}>
             {isMyTurn&&!winner&&!attackingCard&&!chargeStep&&(
-              <button onClick={nextPhase} disabled={isAIThinking} style={{
+              <button onClick={() => { nextPhase(); setTimeout(() => saveGameState?.(), 300); }} disabled={isAIThinking} style={{
                 background:isAIThinking?'rgba(255,255,255,0.05)':phase===TURN_PHASE.END
                   ?'linear-gradient(135deg,#e17055,#d63031)'
                   :'linear-gradient(135deg,#0984e3,#0652aa)',

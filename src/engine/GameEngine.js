@@ -512,6 +512,21 @@ export function resolveAttack(state, targetZone) {
           p_def.life = Math.max(0, p_def.life - llVal);
           logs.push(`💔 Lifelink ${llVal}! 상대 라이프 → ${p_def.life}`);
         }
+        // 아이템 데미지 트리거 (When this card deals damage)
+        if (p_atk.item) {
+          const itmTxt = p_atk.item.text || '';
+          if (/[Ww]hen\s+this\s+card\s+deals?\s+damage.*?soul/i.test(itmTxt) && p_atk.deck.length > 0) {
+            const tc = p_atk.deck[0];
+            const ui = { ...p_atk.item, soul: [...(p_atk.item.soul||[]), tc] };
+            p_atk = { ...p_atk, item: ui, deck: p_atk.deck.slice(1) };
+            logs.push(`💫 ${p_atk.item?.name}: 데미지→소울 (${tc.name})`);
+          }
+          if (/[Ww]hen\s+this\s+card\s+deals?\s+damage.*?gauge/i.test(itmTxt) && p_atk.deck.length > 0) {
+            const tc = p_atk.deck[0];
+            p_atk = { ...p_atk, gauge: [...p_atk.gauge, tc], deck: p_atk.deck.slice(1) };
+            logs.push(`⚡ ${p_atk.item?.name}: 데미지→차지 (${tc.name})`);
+          }
+        }
         // Penetrate: 공격 성공 시 크리티컬만큼 추가 데미지
         const penetrateAttacker = isLinkAttack
           ? attackers.find(a => hasKW(a.card, 'Penetrate'))?.card

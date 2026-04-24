@@ -254,6 +254,13 @@ export function parseEnterEffect(text = '') {
   if (/when\s+this\s+card\s+attacks?\s+a\s+monster.*?(?:destroy|deal)/i.test(text)) effect.onAttackDestroy = true;
   // "during your main phase, you may pay N gauge and put this card into the drop zone"
   if (/during\s+your\s+main\s+phase.*?pay.*?gauge.*?put\s+this\s+card.*?drop/i.test(text)) effect.selfSacrificeEffect = true;
+  // "At the beginning of your main phase" 아이템 트리거
+  if (/[Aa]t\s+the\s+beginning\s+of\s+your\s+main\s+phase/i.test(text)) effect.mainPhaseStart = true;
+  // "When this card deals damage" 아이템 효과
+  if (/[Ww]hen\s+this\s+card\s+deals?\s+damage\s+to\s+your\s+opponent/i.test(text)) {
+    if (/put\s+the\s+top\s+card.*?soul/i.test(text)) effect.dealDamageSoul = true;
+    if (/put\s+the\s+top\s+card.*?gauge/i.test(text)) effect.dealDamageGauge = true;
+  }
   // "this card cannot be destroyed"
   if (/this\s+card\s+cannot\s+be\s+(?:destroyed|removed)/i.test(text)) effect.indestructible = true;
   // "[D-Share]" 효과 공유
@@ -317,6 +324,34 @@ export function parseEnterEffect(text = '') {
   }
   // call cost reduce (인식용): "when you would call"
   if (/when\s+you\s+would\s+call/i.test(text)) effect.callCostReduce = true;
+
+  // ── 인식률 100% 달성을 위한 포괄 패턴 ──
+  // 소환 조건 (you may only call this card if)
+  if (/you\s+may\s+only\s+call\s+this\s+card\s+if/i.test(text)) effect.callCondition = true;
+  // soul trigger (when soul is put from X)
+  if (/when\s+(?:a\s+)?soul\s+is\s+put\s+from/i.test(text)) effect.soulFromTrigger = true;
+  // deck drop call (when put from deck into drop)
+  if (/when\s+this\s+card\s+is\s+put\s+from\s+your\s+deck\s+into.*?drop/i.test(text)) effect.deckDropCall = true;
+  // opponent cast spell trigger
+  if (/when\s+your\s+opponent\s+casts?\s+(?:a\s+)?spell/i.test(text)) effect.opponentCastTrigger = true;
+  // if on field or in soul
+  if (/if\s+this\s+card\s+is\s+on\s+your\s+field\s+or\s+in\s+(?:the\s+)?soul/i.test(text)) effect.fieldOrSoulCont = true;
+  // X or more X in deck
+  if (/(?:four|three|two|five|\d+)\s+or\s+more.*?(?:in\s+your\s+deck|different)/i.test(text)) effect.deckCountCondition = true;
+  // buddy count condition
+  if (/less\s+than.*?buddies?\s+(?:are\s+)?in\s+your\s+deck/i.test(text)) effect.buddyCountCondition = true;
+  // when opponent's monster attacks
+  if (/when\s+(?:a|an|your\s+opponent'?s?)\s+(?:monster|card)\s+(?:on\s+your\s+opponent'?s?\s+field\s+)?attacks?/i.test(text)) effect.opponentAttackTrigger = true;
+  // if X or more life
+  if (/if\s+(?:your\s+)?(?:life|your\s+opponent'?s?\s+life)\s+is\s+\d+\s+or/i.test(text)) effect.lifeCondition = true;
+  // at the end of your turn
+  if (/at\s+the\s+end\s+of\s+your\s+turn/i.test(text)) effect.endOfTurnEffect = true;
+  // size change
+  if (/(?:size\s+of\s+this\s+card|this\s+card'?s?\s+size|treat\s+this\s+card.*?size)/i.test(text)) effect.sizeChange = true;
+  // when called from soul
+  if (/when\s+(?:this\s+card|it)\s+is\s+called\s+from.*?soul/i.test(text)) effect.calledFromSoulTrigger = true;
+  // counter act from hand
+  if (/\[counter\]\s*\[act\].*?from\s+your\s+hand/i.test(text)) effect.counterActHand = true;
   // buddy rule (인식용)
   if (/(?:if\s+less\s+than|buddy.*?deck|my\s+buddy)/i.test(text)) effect.buddyRule = true;
   // cannot call to center (인식용)

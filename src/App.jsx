@@ -8,10 +8,9 @@ import { bgmAutoStart } from './hooks/useBGM.js';
 import { setCardsCache, setDecksCache } from './store/cardCache.js';
 
 export default function App() {
-  const { gameMode } = useGameStore();
+  const { gameMode, loadSavedGame } = useGameStore();
   const [dataLoaded, setDataLoaded] = useState(false);
   const [loadError, setLoadError] = useState(null);
-
   useEffect(() => {
     // BGM 시작
     const handler = () => { bgmAutoStart(); document.removeEventListener('click', handler); };
@@ -26,6 +25,8 @@ export default function App() {
       setCardsCache(cards);
       setDecksCache(decks);
       setDataLoaded(true);
+      // 저장된 게임 복원 (카드 데이터 로딩 후)
+      setTimeout(() => { try { loadSavedGame?.(); } catch {} }, 100);
     }).catch(err => {
       console.error('카드 데이터 로드 실패:', err);
       setLoadError('카드 데이터를 불러올 수 없습니다. 새로고침 해주세요.');

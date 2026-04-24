@@ -31,13 +31,22 @@ const useGameStore = create((set, get) => ({
   setMode: false,
 
   startGame: (pDeck, pFlag, pBuddy, aDeck, aFlag, aBuddy, pSleeve=0, aSleeve=0) => {
-    setAIDifficulty(get().aiDifficulty); // 현재 난이도 적용
+    setAIDifficulty(get().aiDifficulty);
     const gs = createInitialGameState(pDeck, pFlag, pBuddy, aDeck, aFlag, aBuddy, pSleeve, aSleeve);
-    set({ gameState: gs, gameMode: 'game', selectedCard: null,
+    // 재대전용 초기 설정 저장
+    const initConfig = { pDeck, pFlag, pBuddy, aDeck, aFlag, aBuddy, pSleeve, aSleeve };
+    const gsWithConfig = { ...gs, _initConfig: initConfig };
+    set({ gameState: gsWithConfig, gameMode: 'game', selectedCard: null,
           chargeStep: null, linkMode: false, setMode: false, isAIThinking: false });
-    if (gs.activePlayer === 'ai') {
-      setTimeout(() => get()._runAITurn(gs), 150);
+    if (gsWithConfig.activePlayer === 'ai') {
+      setTimeout(() => get()._runAITurn(gsWithConfig), 150);
     }
+  },
+  reMatch: () => {
+    const cfg = get().gameState?._initConfig;
+    if (!cfg) return;
+    const { pDeck, pFlag, pBuddy, aDeck, aFlag, aBuddy, pSleeve=0, aSleeve=0 } = cfg;
+    get().startGame(pDeck, pFlag, pBuddy, aDeck, aFlag, aBuddy, pSleeve, aSleeve);
   },
 
   _runAITurn: async (initialState) => {
@@ -293,6 +302,30 @@ const useGameStore = create((set, get) => ({
   setLang: (lang) => {
     localStorage.setItem('bf_language', lang);
     set({ lang });
+  },
+  saveGameState: () => {
+    const { gameState } = get();
+    if (!gameState || gameState.winner) {
+      try { localStorage.removeItem('bf_saved_game'); } catch {}
+      return;
+    }
+    try {
+      localStorage.setItem('bf_saved_game', JSON.stringify({ ...gameState, _savedAt: Date.now() }));
+    } catch(e) {}
+  },
+  loadSavedGame: () => {
+    try {
+      const raw = localStorage.getItem('bf_saved_game');
+      if (!raw) return false;
+      const gs = JSON.parse(raw);
+      if (!gs || Date.now() - (gs._savedAt||0) > 3600000) {
+        localStorage.removeItem('bf_saved_game'); return false;
+      }
+      set({ gameState: gs, gameMode: 'game', selectedCard: null,
+            chargeStep: null, linkMode: false, setMode: false, isAIThinking: false,
+            counterWindow: null, pendingActChoice: null });
+      return true;
+    } catch { return false; }
   },
 
   goToMenu: () => {

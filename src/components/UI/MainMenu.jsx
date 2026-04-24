@@ -8,9 +8,7 @@ import { getCardsCache, getDecksCache } from '../../store/cardCache.js';
 
 import { CARD_TYPE } from '../../utils/constants.js';
 
-const allCards = getCardsCache() || [];
-const prebuiltDecks = getDecksCache() || {};
-const cardMap = Object.fromEntries(allCards.map(c => [c.id, c]));
+// allCards/prebuiltDecks는 컴포넌트 내부에서 초기화 (비동기 로딩 대응)
 
 // 월드 이름 매핑
 const WORLD_NAMES = {
@@ -34,6 +32,9 @@ function buildDeckFromPrebuilt(deckData) {
 
 export default function MainMenu() {
   const { startGame, goToDeckBuilder, aiDifficulty, setAIDifficulty, lang, setLang } = useGameStore();
+  const allCards = getCardsCache() || [];
+  const prebuiltDecks = getDecksCache() || {};
+  const cardMap = Object.fromEntries(allCards.map(c => [c.id, c]));
   const [selectedDeck, setSelectedDeck] = useState('S-SD01 Dradeity');
   const [aiDeck, setAiDeck] = useState('S-SD02 Triangulum Galaxy');
 

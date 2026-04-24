@@ -1,2 +1,20 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #0d0d1a; }
+
+/* ── 모바일 반응형 ── */
+@media (max-width: 768px) {
+  /* 필드 존 크기 축소 */
+  .field-zone { min-width: 70px !important; min-height: 90px !important; }
+  /* 손패 카드 축소 */
+  .hand-card { width: 52px !important; height: 72px !important; }
+  /* HUD 폰트 축소 */
+  .hud-text { font-size: 10px !important; }
+  /* 버튼 패딩 축소 */
+  .game-btn { padding: 6px 10px !important; font-size: 11px !important; }
+  /* 로그 숨김 처리 (모바일에서 공간 확보) */
+  .log-panel { max-height: 80px !important; font-size: 8px !important; }
+}
+@media (max-width: 480px) {
+  .field-zone { min-width: 55px !important; min-height: 75px !important; }
+  .hand-card { width: 44px !important; height: 60px !important; }
+}

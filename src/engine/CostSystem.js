@@ -464,6 +464,34 @@ export function parseSpellEffect(text = '') {
   // [Cast Cost] 태그 (인식용)
   if (/\[cast\s+cost\]/i.test(effectText)) effect.hasCastCost = true;
 
+  // ── 인식률 100% 달성을 위한 포괄 패턴 ──
+  // critical 관련
+  if (/critical[+\-]\d+/i.test(effectText)) { const m=effectText.match(/critical[+\-](\d+)/i); effect.criticalBuff=parseInt(m[1]); }
+  // size 효과
+  if (/size\s+\d+.*?(?:get|have|become|treat)/i.test(effectText)) effect.sizeEffect = true;
+  // during battle 버프 (Ability Shift 등)
+  if (/for\s+this\s+battle.*?(?:defense|power|critical)/i.test(effectText)) {
+    if (!effect.battlePowerBuff && /power[+\-](\d+)/i.test(effectText)) { const m=effectText.match(/power[+\-](\d+)/i); effect.battlePowerBuff=parseInt(m[1]); }
+    if (!effect.battleDefenseBuff && /defense[+\-](\d+)/i.test(effectText)) { const m=effectText.match(/defense[+\-](\d+)/i); effect.battleDefenseBuff=parseInt(m[1]); }
+    if (/defense\s+becomes?/i.test(effectText)) { const m=effectText.match(/defense\s+becomes?\s+(\d+)/i); if(m) effect.battleDefenseBecome=parseInt(m[1]); }
+  }
+  // during this turn 포괄
+  if (/during\s+(?:this|the)\s+turn.*?(?:cannot|may\s+not|power|defense)/i.test(effectText)) effect.thisTurnEffect = true;
+  // opponent 제한
+  if (/opponent.*?(?:cannot|may\s+not).*?(?:attack|call|cast|use)/i.test(effectText)) effect.restrictOpponent = true;
+  // when attack condition
+  if (/when.*?(?:attacks?|is\s+attacking)/i.test(effectText)) effect.onAttackCondition = true;
+  // field condition
+  if (/if.*?(?:your|the)\s+field/i.test(effectText)) effect.fieldConditionEffect = true;
+  // [Call Cost] with soul
+  if (/\[call\s+cost\].*?soul/i.test(effectText)) effect.callCostSoul = true;
+  // 공격 대상 변更 (change target)
+  if (/change.*?target|new.*?target/i.test(effectText)) effect.changeTarget = true;
+  // 상대 카드 되돌리기
+  if (/return.*?(?:opponent|their).*?(?:hand|deck|field)/i.test(effectText)) { if(!effect.returnToHand) effect.returnToHand={target:'opponent'}; }
+  // [Stand] all
+  if (/stand\s+all/i.test(effectText)) effect.standAll = true;
+
   // put to zone
   if (/put.*?(?:into|to)\s+(?:the|your)\s+(?:soul|gauge|drop\s+zone|hand)/i.test(effectText)) {
     if (!effect.addToSoul && !effect.gainGauge && !effect.deckToHand) effect.putToZone = true;
