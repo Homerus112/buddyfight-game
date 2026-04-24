@@ -2,8 +2,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { bgmToggle, bgmNext, bgmSubscribe } from '../../hooks/useBGM.js';
 import { t as i18nT } from '../../i18n/useI18n.js';
 import useGameStore from '../../store/gameStore.js';
-import allCards from '../../data/cards.json';
-import prebuiltDecks from '../../data/prebuilt_decks.json';
+import { getCardsCache, getDecksCache } from '../../App.jsx';
+
 import Card from '../Card/Card.jsx';
 import { CARD_TYPE, CARD_TYPE_NAME } from '../../utils/constants.js';
 
@@ -198,7 +198,35 @@ export default function DeckBuilder() {
           <button style={tabStyle('deck')} onClick={()=>setTab('deck')}>🃏 덱</button>
         </div>
         <div style={{display:'flex',gap:6,marginLeft:'auto'}}>
-          <button onClick={handleSave} style={{background:'#00b894',color:'#fff',border:'none',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:12,fontWeight:'bold'}}>💾 저장</button>
+          <button onClick={handleSave} style={{background:'#00b894',color:'#fff',border:'none',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:12,fontWeight:'bold'}}>💾 {T('저장','Save')}</button>
+          <button onClick={() => {
+            const exportData = { name: deckName, flagId: selectedFlag?.id, buddyId: selectedBuddy?.id, cards: deck.map(c => c.id) };
+            const code = btoa(unescape(encodeURIComponent(JSON.stringify(exportData))));
+            navigator.clipboard?.writeText(code).catch(() => {});
+            setSaveMsg(T('📋 덱 코드 복사됨!','📋 Code copied!'));
+            setTimeout(() => setSaveMsg(''), 2500);
+          }} style={{background:'rgba(0,184,148,0.2)',color:'#00b894',border:'1px solid rgba(0,184,148,0.4)',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:11}}>
+            {T('📤 내보내기','📤 Export')}
+          </button>
+          <button onClick={() => {
+            const code = prompt(T('덱 코드를 붙여넣으세요:','Paste deck code:'));
+            if (!code) return;
+            try {
+              const data = JSON.parse(decodeURIComponent(escape(atob(code))));
+              if (data.name) setDeckName(data.name);
+              if (data.flagId) { const f = cardMap[data.flagId]; if (f) setSelectedFlag(f); }
+              if (data.buddyId) { const b = cardMap[data.buddyId]; if (b) setSelectedBuddy(b); }
+              if (data.cards?.length) {
+                const imported = data.cards.map(id => cards.find(c => c.id === id)).filter(Boolean)
+                  .map(c => ({ ...c, instanceId: `inst_${c.id}_${Math.random().toString(36).slice(2)}` }));
+                setDeck(imported);
+                setSaveMsg(T('✅ 덱 가져오기 완료!','✅ Deck imported!'));
+                setTimeout(() => setSaveMsg(''), 2500);
+              }
+            } catch(e) { alert(T('잘못된 덱 코드입니다.','Invalid code.')); }
+          }} style={{background:'rgba(116,185,255,0.15)',color:'#74b9ff',border:'1px solid rgba(116,185,255,0.3)',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:11}}>
+            {T('📥 가져오기','📥 Import')}
+          </button>
           <button onClick={handleStartGame} style={{background:'#e17055',color:'#fff',border:'none',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:12,fontWeight:'bold'}}>▶ 게임 시작</button>
           {/* 난이도 선택 */}
           <div style={{display:'flex',alignItems:'center',gap:4,marginLeft:8}}>

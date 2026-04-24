@@ -366,7 +366,25 @@ export function parseSpellEffect(text = '') {
       if (/power\+(\d+)/i.test(optText)) { const m=optText.match(/power\+(\d+)/i); subEffect.battlePowerBuff=parseInt(m[1]); }
       if (/defense\+(\d+)/i.test(optText)) { const m=optText.match(/defense\+(\d+)/i); subEffect.battleDefenseBuff=parseInt(m[1]); }
       if (/critical\+(\d+)/i.test(optText)) { const m=optText.match(/critical\+(\d+)/i); subEffect.criticalBuff=parseInt(m[1]); }
-      opts.push({ text: optText.slice(0,80), effect: subEffect });
+      // deckToHand (put from deck/drop into hand)
+      if (/put.*?from.*?(?:deck|drop).*?into.*?hand|search.*?deck.*?hand/i.test(optText)) subEffect.deckToHand = true;
+      // callFromDrop
+      if (/call.*?from.*?(?:your\s+)?drop/i.test(optText)) subEffect.callFromDrop = true;
+      // gainGauge
+      if (/(?:into|your)\s+gauge|put.*?gauge/i.test(optText)) {
+        const gm = optText.match(/top\s+(\w+|\d+)\s+cards?/i);
+        const gmap = {one:1,two:2,three:3,four:4,five:5};
+        subEffect.gainGauge = gm ? (gmap[gm[1]?.toLowerCase()] ?? parseInt(gm[1]) ?? 1) : 1;
+      }
+      // deckToDrop
+      if (/put.*?deck.*?drop|top.*?cards?.*?drop/i.test(optText)) {
+        const dm = optText.match(/top\s+(\w+|\d+)\s+cards?/i);
+        const dmap = {one:1,two:2,three:3,four:4};
+        subEffect.deckToDrop = dm ? (dmap[dm[1]?.toLowerCase()] ?? parseInt(dm[1]) ?? 1) : 1;
+      }
+      // shuffleDeck
+      if (/shuffle.*?deck/i.test(optText)) subEffect.shuffleDeck = true;
+      opts.push({ text: optText.slice(0,100), effect: subEffect });
     }
     if (opts.length > 0) {
       effect.chooseOptions = opts;

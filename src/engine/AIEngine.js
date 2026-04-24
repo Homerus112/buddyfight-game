@@ -122,8 +122,29 @@ function chooseTarget(state, card) {
   const hasOpp = pf.center || pf.left || pf.right;
   if (!hasOpp) return 'player';
   if (!diff.optimal) return pf.center ? 'center' : (pf.left ? 'left' : 'right');
-  // 가장 방어력 낮은 몬스터 공격
+
   const targets = ['center','left','right'].filter(z => pf[z]);
+  const attackPow = card?.power || 0;
+
+  // Shadow Dive: 직접 플레이어 공격 가능
+  if (/\[Shadow Dive\]/i.test(card?.text||'')) return 'player';
+
+  // Disaster: OTK 가능하면 직접 공격
+  if (_difficulty === 'disaster' && !hasOpp) return 'player';
+
+  // Penetrate: 방어 낮은 카드 공격 (관통 데미지 노림)
+  if (/\[Penetrate\]/i.test(card?.text||'')) {
+    return targets.sort((a,b) => (pf[a].defense||0) - (pf[b].defense||0))[0];
+  }
+
+  // Soulguard 우회: 소울가드 없는 카드 우선 공격
+  const noSoulguard = targets.filter(z => !/\[Soulguard\]/i.test(pf[z]?.text||''));
+  if (noSoulguard.length > 0) {
+    // 소울가드 없는 카드 중 방어 낮은 것
+    return noSoulguard.sort((a,b) => (pf[a].defense||0) - (pf[b].defense||0))[0];
+  }
+
+  // 방어 낮은 카드 공격
   return targets.sort((a,b) => (pf[a].defense||0) - (pf[b].defense||0))[0];
 }
 
@@ -134,6 +155,20 @@ function aiMainPhase(state) {
   const aGauge = s.ai.gauge?.length || 0;
   const aHand = s.ai.hand?.length || 0;
   const pLife = s.player.life;
+
+  // 0. 버디콜 (Disaster: 라이프 5 이하 시 적극 사용)
+  if (diff.optimal && aLife <= 5) {
+    const buddy = s.ai.hand.find(c => c.instanceId === s.ai.buddy?.instanceId);
+    if (!buddy && s.ai.deck.length > 0) {
+      // 버디 카드를 덱에서 찾아서 콜
+      const buddyInDeck = s.ai.deck.find(c => c.id === s.ai.buddy?.id);
+      if (buddyInDeck) {
+        // 버디콜 시뮬: 라이프 +1
+        s = { ...s, ai: { ...s.ai, life: Math.min(s.ai.life + 1, 30),
+          deck: s.ai.deck.filter(c => c.id !== buddyInDeck.id).sort(() => Math.random()-0.5) } };
+      }
+    }
+  }
 
   // 1. 아이템 장착
   if (!s.ai.item) {

@@ -302,7 +302,19 @@ export function parseEnterEffect(text = '') {
   // "when this card deals damage to your opponent, put top card into soul"
   if (/when\s+this\s+card\s+deals?\s+damage.*?(?:put|soul)/i.test(text)) effect.onDealDamageSoul = true;
   // "when you equip this card, you may discard"
-  if (/when\s+you\s+equip\s+this\s+card/i.test(text)) effect.onEquip = true;
+  if (/when\s+you\s+equip\s+this\s+card/i.test(text)) {
+    effect.onEquip = true;
+    // 장착 즉시 효과 파싱
+    const eqText = text.replace(/^[\s\S]*?when\s+you\s+equip\s+this\s+card[,.]?\s*/i, '').toLowerCase();
+    const gainLifeEqM = eqText.match(/you\s+gain\s+(\d+)\s+life/i);
+    if (gainLifeEqM) effect.onEquipGainLife = parseInt(gainLifeEqM[1]);
+    const gaugeEqM = eqText.match(/put\s+the\s+top\s+(?:(\w+|\d+)\s+)?cards?.*?gauge/i);
+    if (gaugeEqM) { const gmap={one:1,two:2,three:3}; effect.onEquipGainGauge = gmap[gaugeEqM[1]?.toLowerCase()] ?? parseInt(gaugeEqM[1]) ?? 1; }
+    const drawEqM = eqText.match(/draw\s+(\d+|a)\s+cards?/i);
+    if (drawEqM) effect.onEquipDraw = drawEqM[1]==='a'?1:parseInt(drawEqM[1]);
+    if (/you\s+may\s+discard/i.test(eqText)) effect.onEquipDiscardOptional = true;
+    if (/put.*?soul/i.test(eqText)) effect.onEquipSoul = true;
+  }
   // call cost reduce (인식용): "when you would call"
   if (/when\s+you\s+would\s+call/i.test(text)) effect.callCostReduce = true;
   // buddy rule (인식용)
@@ -568,6 +580,54 @@ export function applyEnterEffect(state, card, ownerSide) {
     logs.push(`⬆️ ${card.name}: 내 필드 버프`);
   }
 
+  // onEquip 즉시 효과 처리
+  if (effect.onEquip) {
+    if (effect.onEquipGainLife) {
+      p = { ...p, life: Math.min(p.life + effect.onEquipGainLife, 30) };
+      logs.push(`❤️ 장착 효과: 라이프 +${effect.onEquipGainLife} → ${p.life}`);
+    }
+    if (effect.onEquipGainGauge && p.deck.length > 0) {
+      const _n = Math.min(effect.onEquipGainGauge, p.deck.length);
+      p = { ...p, gauge: [...p.gauge, ...p.deck.slice(0,_n)], deck: p.deck.slice(_n) };
+      logs.push(`⚡ 장착 효과: 차지 ${_n}장`);
+    }
+    if (effect.onEquipDraw && p.deck.length > 0) {
+      const drawn = p.deck.slice(0, effect.onEquipDraw);
+      p = { ...p, hand: [...p.hand, ...drawn], deck: p.deck.slice(effect.onEquipDraw) };
+      logs.push(`🃏 장착 효과: 드로우 ${drawn.length}장`);
+    }
+    if (effect.onEquipSoul && card) {
+      const topCard = p.deck[0];
+      if (topCard && p.item) {
+        const updatedItem = { ...p.item, soul: [...(p.item.soul||[]), topCard] };
+        p = { ...p, item: updatedItem, deck: p.deck.slice(1) };
+        logs.push(`💫 장착 효과: ${topCard.name} → 아이템 소울`);
+      }
+    }
+  }
+  // onEquip 즉시 효과 처리 (아이템 장착 시)
+  if (effect.onEquip) {
+    if (effect.onEquipGainLife) {
+      p = { ...p, life: Math.min(p.life + effect.onEquipGainLife, 30) };
+      logs.push(`❤️ 장착 효과: 라이프 +${effect.onEquipGainLife} → ${p.life}`);
+    }
+    if (effect.onEquipGainGauge && p.deck.length > 0) {
+      const _n = Math.min(effect.onEquipGainGauge, p.deck.length);
+      p = { ...p, gauge: [...p.gauge, ...p.deck.slice(0,_n)], deck: p.deck.slice(_n) };
+      logs.push(`⚡ 장착 효과: 차지 ${_n}장`);
+    }
+    if (effect.onEquipDraw && p.deck.length > 0) {
+      const drawn = p.deck.slice(0, effect.onEquipDraw);
+      p = { ...p, hand: [...p.hand, ...drawn], deck: p.deck.slice(effect.onEquipDraw) };
+      logs.push(`🃏 장착 효과: 드로우 ${drawn.length}장`);
+    }
+    if (effect.onEquipSoul && p.item && p.deck.length > 0) {
+      const topCard = p.deck[0];
+      const updatedItem = { ...p.item, soul: [...(p.item.soul||[]), topCard] };
+      p = { ...p, item: updatedItem, deck: p.deck.slice(1) };
+      logs.push(`💫 장착 효과: ${topCard.name} → 아이템 소울`);
+    }
+  }
   const resultState = { ...state, [ownerSide]: p, [def]: defP,
     _chosenEnterEffect: undefined, _pendingChooseEnter: undefined,
     log: [...state.log, ...logs] };

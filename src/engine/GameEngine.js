@@ -365,6 +365,11 @@ export function equipItem(state, instanceId) {
     firstTurnMonsterCount: state.isFirstTurn ? (state.firstTurnMonsterCount||0)+1 : state.firstTurnMonsterCount,
     log: [...state.log, ...buddyLog2, `[${ap==='player'?'나':'AI'}] ${card.name} 장착`],
   };
+  // 비공격 데미지 감소 아이템 효과 설정
+  if (/damage.*?(?:other than|except).*?attacks?.*?reduc|damage dealt to you.*?(?:other|except).*?reduc/i.test(card.text||'')) {
+    const _rm = (card.text||'').match(/reduced?\s+by\s+(\d+)/i);
+    if (_rm) equipResult = { ...equipResult, [ap]: { ...equipResult[ap], item: { ...equipResult[ap].item, _nonAttackReduce: parseInt(_rm[1]) } } };
+  }
   // 아이템 장착 시 enterEffect 적용
   const itemEnterEffect = applyEnterEffect(equipResult, card, 'item', ap);
   if (itemEnterEffect !== equipResult) equipResult = itemEnterEffect;
@@ -772,11 +777,41 @@ export function castSpell(state, instanceId) {
     try {
     if (effect.nullifyAttack && state.attackingCard) { nullified = true; logs.push('🛡️ 공격 무효화!'); }
     if (effect.gainLife) { updatedP = { ...updatedP, life: Math.min(updatedP.life + effect.gainLife, 30) }; logs.push(`❤️ 라이프 +${effect.gainLife} → ${updatedP.life}`); }
-    if (effect.damage) { defP = { ...defP, life: Math.max(0, defP.life - effect.damage) }; logs.push(`💥 ${effect.damage} 데미지 → 상대 라이프 ${defP.life}`); }
+    if (effect.damage) {
+    const _reduce = updatedP.item?._nonAttackReduce || 0;
+    const _actualDmg = Math.max(0, effect.damage - _reduce);
+    defP = { ...defP, life: Math.max(0, defP.life - _actualDmg) };
+    logs.push(`💥 ${_actualDmg} 데미지${_reduce?` (-${_reduce} 감소)`:''}→ 상대 라이프 ${defP.life}`);
+  }
     if (effect.gainGauge && updatedP.deck.length > 0) { const _gn=Math.min(typeof effect.gainGauge==='number'?effect.gainGauge:1,updatedP.deck.length); updatedP={...updatedP,gauge:[...updatedP.gauge,...updatedP.deck.slice(0,_gn)],deck:updatedP.deck.slice(_gn)}; logs.push(`⚡ 차지 ${_gn}장`); }
     if (effect.draw) { const drawn = updatedP.deck.slice(0, effect.draw); updatedP = { ...updatedP, hand: [...updatedP.hand, ...drawn], deck: updatedP.deck.slice(effect.draw) }; logs.push(`🃏 드로우 ${drawn.length}장`); }
     if (effect.discardAll) { updatedP = { ...updatedP, drop: [...updatedP.drop, ...updatedP.hand], hand: [] }; logs.push('🗑️ 손패 전부 버림'); }
     if (effect.deckToDrop) { const dropped = updatedP.deck.slice(0, effect.deckToDrop); updatedP = { ...updatedP, deck: updatedP.deck.slice(effect.deckToDrop), drop: [...updatedP.drop, ...dropped] }; logs.push(`🗑️ 덱 ${dropped.length}장 드롭`); }
+    if (effect.deckToDrop && updatedPlayer.deck.length > 0) {
+      const _dd = Math.min(effect.deckToDrop, updatedPlayer.deck.length);
+      const _ddrp = updatedPlayer.deck.slice(0, _dd);
+      updatedPlayer = { ...updatedPlayer, deck: updatedPlayer.deck.slice(_dd), drop: [...updatedPlayer.drop, ..._ddrp] };
+      logs.push(`🗑️ 덱 상단 ${_dd}장 → 드롭`);
+    }
+    if (effect.deckToHand && updatedPlayer.deck.length > 0) {
+      const _sh = updatedPlayer.deck[0];
+      if (_sh) {
+        updatedPlayer = { ...updatedPlayer, hand: [...updatedPlayer.hand, _sh], deck: updatedPlayer.deck.slice(1) };
+        logs.push(`🔍 ${_sh.name} → 손패`);
+      }
+    }
+    if (effect.shuffleDeck) {
+      updatedPlayer = { ...updatedPlayer, deck: [...updatedPlayer.deck].sort(() => Math.random()-0.5) };
+      logs.push(`🔀 덱 셔플`);
+    }
+    if (effect.returnToHand?.target === 'opponent') {
+      const _rz = ['center','left','right'].find(z => updatedAI.field[z]);
+      if (_rz) {
+        const _rc = updatedAI.field[_rz];
+        updatedAI = { ...updatedAI, field: { ...updatedAI.field, [_rz]: null }, hand: [...updatedAI.hand, _rc] };
+        logs.push(`↩️ ${_rc.name} → 상대 손패`);
+      }
+    }
     if (effect.destroyMaxPower != null || effect.destroyAll) {
       let newField = { ...defP.field }; let newDrop = [...defP.drop];
       for (const z of ['left','center','right']) {
@@ -1132,6 +1167,24 @@ export function counterCastSpell(state, instanceId) {
       const _gn = Math.min(typeof effect.gainGauge==='number'?effect.gainGauge:1, updatedPlayer.deck.length);
       updatedPlayer = { ...updatedPlayer, gauge: [...updatedPlayer.gauge,...updatedPlayer.deck.slice(0,_gn)], deck: updatedPlayer.deck.slice(_gn) };
       logs.push(`⚡ 차지 ${_gn}장`);
+    }
+    if (effect.deckToDrop && updatedPlayer.deck.length > 0) {
+      const _dd = Math.min(effect.deckToDrop, updatedPlayer.deck.length);
+      const _ddrp = updatedPlayer.deck.slice(0, _dd);
+      updatedPlayer = { ...updatedPlayer, deck: updatedPlayer.deck.slice(_dd), drop: [...updatedPlayer.drop, ..._ddrp] };
+      logs.push(`🗑️ 덱 상단 ${_dd}장 → 드롭`);
+    }
+    if (effect.deckToHand && updatedPlayer.deck.length > 0) {
+      const _sh = updatedPlayer.deck[0];
+      if (_sh) { updatedPlayer = { ...updatedPlayer, hand: [...updatedPlayer.hand, _sh], deck: updatedPlayer.deck.slice(1) }; logs.push(`🔍 ${_sh.name} → 손패`); }
+    }
+    if (effect.shuffleDeck) {
+      updatedPlayer = { ...updatedPlayer, deck: [...updatedPlayer.deck].sort(() => Math.random()-0.5) };
+      logs.push(`🔀 덱 셔플`);
+    }
+    if (effect.returnToHand?.target === 'opponent') {
+      const _rz = ['center','left','right'].find(z => updatedAI.field[z]);
+      if (_rz) { const _rc = updatedAI.field[_rz]; updatedAI = { ...updatedAI, field: { ...updatedAI.field, [_rz]: null }, hand: [...updatedAI.hand, _rc] }; logs.push(`↩️ ${_rc.name} → 상대 손패`); }
     }
     if (effect.destroyMaxPower != null || effect.destroyAll) {
       let newField = { ...updatedAI.field };
