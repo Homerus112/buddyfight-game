@@ -17,44 +17,51 @@ const WORLD_NAMES = {
   9: 'Legend World', 10: 'Star Dragon World', 11: 'Darkness Dragon World',
 };
 
-function buildDeckFromPrebuilt(deckData) {
-  if (!deckData) return [];
-  const cm = cardMap;
-  // 새 형식: cardIds 배열
-  if (deckData.cardIds) {
-    return deckData.cardIds
-      .map(id => cm[id])
-      .filter(c => c && c.type !== 5)
-      .map(c => ({...c, instanceId: `inst_${c.id}_${Math.random().toString(36).slice(2)}`}));
-  }
-  // 구 형식: cards 배열
-  const result = [];
-  for (const entry of (deckData.cards || [])) {
-    const card = cm[entry.id];
-    if (card && card.type !== 5) {
-      for (let i = 0; i < Math.min(entry.count || 1, 4); i++) {
-        result.push({...card, instanceId: `inst_${card.id}_${Math.random().toString(36).slice(2)}`});
-      }
-    }
-  }
-  return result;
-}
+// buildDeckFromPrebuilt는 컴포넌트 내부에서 정의
 
 export default function MainMenu() {
   const { startGame, goToDeckBuilder, aiDifficulty, setAIDifficulty, lang, setLang } = useGameStore();
   const allCards = getCardsCache() || [];
   const prebuiltDecks = getDecksCache() || {};
   const cardMap = Object.fromEntries(allCards.map(c => [c.id, c]));
-  const [selectedDeck, setSelectedDeck] = useState('S-SD01 Dradeity');
-  const [aiDeck, setAiDeck] = useState('S-SD02 Triangulum Galaxy');
 
-  const deckNames = Object.keys(prebuiltDecks);
+  // 프리빌트 덱 → 카드 배열 변환
+  const buildDeckFromPrebuilt = (deckData) => {
+    if (!deckData) return [];
+    if (deckData.cardIds) {
+      return deckData.cardIds
+        .map(id => cardMap[id])
+        .filter(c => c && c.type !== 5)
+        .map(c => ({...c, instanceId: `inst_${c.id}_${Math.random().toString(36).slice(2)}`}));
+    }
+    const result = [];
+    for (const entry of (deckData.cards || [])) {
+      const card = cardMap[entry.id];
+      if (card && card.type !== 5) {
+        for (let i = 0; i < Math.min(entry.count || 1, 4); i++) {
+          result.push({...card, instanceId: `inst_${card.id}_${Math.random().toString(36).slice(2)}`});
+        }
+      }
+    }
+    return result;
+  };
+  const deckKeys = Object.keys(prebuiltDecks);
+  const deckNames = deckKeys; // alias
+  // 카드 데이터 로딩 후 덱 자동 선택
+  React.useEffect(() => {
+    if (deckKeys.length > 0 && (!selectedDeck || !prebuiltDecks[selectedDeck])) {
+      setSelectedDeck(deckKeys[0]);
+      setAiDeck(deckKeys[Math.min(1, deckKeys.length-1)]);
+    }
+  }, [deckKeys.length]);
+  const [selectedDeck, setSelectedDeck] = useState(() => Object.keys(getDecksCache()||{})[0] || '');
+  const [aiDeck, setAiDeck] = useState(() => Object.keys(getDecksCache()||{})[1] || '');
 
   const handleStart = () => {
     const playerDeckData = prebuiltDecks[selectedDeck];
     const aiDeckData = prebuiltDecks[aiDeck];
 
-    if (!playerDeckData || !aiDeckData) { alert('덱을 선택해주세요'); return; }
+    if (!playerDeckData || !aiDeckData) { alet('덱을 선택해주세요','Please select a deck'); return; }
 
     const playerCards = buildDeckFromPrebuilt(playerDeckData);
     const aiCards = buildDeckFromPrebuilt(aiDeckData);
@@ -97,31 +104,31 @@ export default function MainMenu() {
         background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: '16px 24px',
         border: '1px solid #333', width: '100%', maxWidth: 480,
       }}>
-        <div style={{ fontSize: 14, color: '#74b9ff', marginBottom: 12, fontWeight: 'bold' }}>⚔️ 덱 선택</div>
+        <div style={{ fontSize: 14, color: '#74b9ff', marginBottom: 12, fontWeight: 'bold' }}>{t('⚔️ 덱 선택','⚔️ Select Deck','⚔️ Select Deck')}</div>
 
         {/* 내 덱 */}
         <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>내 덱</div>
+          <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>{t('내 덱','My Deck')}</div>
           <select value={selectedDeck} onChange={e => setSelectedDeck(e.target.value)}
             style={{ width: '100%', background: '#2d3748', color: '#eee', border: '1px solid #555', borderRadius: 6, padding: '8px 10px', fontSize: 13 }}>
             {deckNames.map(n => (
-              <option key={n} value={n}>{n}</option>
+              <option key={n} value={n}>{prebuiltDecks[n]?.name || n}</option>
             ))}
           </select>
           {prebuiltDecks[selectedDeck] && (
             <div style={{ fontSize: 11, color: '#636e72', marginTop: 4 }}>
-              플래그: {prebuiltDecks[selectedDeck].flagName} | 버디: {prebuiltDecks[selectedDeck].buddyName} | {prebuiltDecks[selectedDeck].totalCards}장
+              {t('플래그','Flag')}: {prebuiltDecks[selectedDeck].flagName} | {t('버디','Buddy')}: {prebuiltDecks[selectedDeck].buddyName} | {prebuiltDecks[selectedDeck].totalCards}장
             </div>
           )}
         </div>
 
         {/* AI 덱 */}
         <div>
-          <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>AI 덱</div>
+          <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>{t('AI 덱','AI Deck')}</div>
           <select value={aiDeck} onChange={e => setAiDeck(e.target.value)}
             style={{ width: '100%', background: '#2d3748', color: '#eee', border: '1px solid #555', borderRadius: 6, padding: '8px 10px', fontSize: 13 }}>
             {deckNames.map(n => (
-              <option key={n} value={n}>{n}</option>
+              <option key={n} value={n}>{prebuiltDecks[n]?.name || n}</option>
             ))}
           </select>
         </div>
@@ -129,14 +136,14 @@ export default function MainMenu() {
 
       {/* 카드 수 정보 */}
       <div style={{ textAlign: 'center' }}>
-        <div style={{ color: '#74b9ff', fontSize: 12 }}>전체 카드 데이터</div>
+        <div style={{ color: '#74b9ff', fontSize: 12 }}>{t('전체 카드 데이터','Total Cards','Total Card Data')}</div>
         <div style={{ fontSize: 28, fontWeight: 'bold', color: '#ffd700' }}>{allCards.length.toLocaleString()}장</div>
-        <div style={{ color: '#aaa', fontSize: 11 }}>모든 월드 포함</div>
+        <div style={{ color: '#aaa', fontSize: 11 }}>{t('모든 월드 포함','All Worlds','All Worlds Included')}</div>
       </div>
 
       {/* 난이도 선택 */}
       <div style={{width:'100%',maxWidth:320,marginBottom:8}}>
-        <div style={{fontSize:12,color:'#aaa',marginBottom:8,textAlign:'center'}}>AI 난이도</div>
+        <div style={{fontSize:12,color:'#aaa',marginBottom:8,textAlign:'center'}}>{t('AI 난이도','AI Difficulty')}</div>
         <div style={{display:'flex',gap:6,justifyContent:'center'}}>
           {[{id:'easy',label:'😊 Easy',color:'#00b894'},{id:'normal',label:'⚔️ Normal',color:'#0984e3'},{id:'hard',label:'🔥 Hard',color:'#e17055'},{id:'disaster',label:'💀 Disaster',color:'#6c5ce7'}].map(d=>(
             <button key={d.id} onClick={()=>setAIDifficulty(d.id)} style={{
@@ -157,13 +164,13 @@ export default function MainMenu() {
           color: '#fff', border: 'none', borderRadius: 10,
           padding: '14px', fontSize: 18, fontWeight: 'bold',
           cursor: 'pointer', boxShadow: '0 4px 20px rgba(225,112,85,0.4)',
-        }}>⚔️ 게임 시작</button>
+        }}>{t('⚔️ 게임 시작','⚔️ Start Game')}</button>
 
         <button onClick={goToDeckBuilder} style={{
           background: 'linear-gradient(135deg, #0984e3, #6c5ce7)',
           color: '#fff', border: 'none', borderRadius: 10,
           padding: '14px', fontSize: 16, cursor: 'pointer',
-        }}>🃏 덱 빌더</button>
+        }}>{t('🃏 덱 빌더','🃏 Deck Builder')}</button>
 
            <button onClick={() => setShowStats(true)} style={{
           background: 'linear-gradient(135deg,rgba(116,185,255,0.2),rgba(108,92,231,0.2))',
