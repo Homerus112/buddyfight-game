@@ -439,6 +439,7 @@ export default function GameBoard() {
     playDoubleAttack, playMoveMonster, goToMenu, playActEffect, playHandActEffect,
     pendingChooseEffect, resolveChooseEffect,
     lang, pendingActChoice, resolveActChoice, clearActChoice, resolveChooseEnter,
+    saveGameState, // ✅ fix64: saveGameState 구조분해 누락 수정
   } = useGameStore();
 
   const [logOpen, setLogOpen] = useState(true);

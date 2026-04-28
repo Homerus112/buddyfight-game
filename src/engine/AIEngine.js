@@ -155,6 +155,7 @@ function aiMainPhase(state) {
   const aGauge = s.ai.gauge?.length || 0;
   const aHand = s.ai.hand?.length || 0;
   const pLife = s.player.life;
+  const aLife = s.ai.life; // ✅ fix64: aLife 미선언 → ReferenceError 수정
 
   // 0. 버디콜 (Disaster: 라이프 5 이하 시 적극 사용)
   if (diff.optimal && aLife <= 5) {
@@ -197,9 +198,12 @@ function aiMainPhase(state) {
 
   // 3. 몬스터 소환
   const monsters = s.ai.hand.filter(c => c.type === CARD_TYPE.MONSTER);
+  // ✅ fix64: sort 콜백 구조 버그 수정 (삼항 안에 화살표 함수 반환 → 동작 안 함)
   const sorted = diff.optimal
     ? [...monsters].sort((a,b) => scoreMonster(b,s) - scoreMonster(a,s))
-    : [...monsters].sort(() => _difficulty === 'easy' ? Math.random()-0.5 : (b,a) => (b.power||0)-(a.power||0));
+    : _difficulty === 'easy'
+      ? [...monsters].sort(() => Math.random() - 0.5)
+      : [...monsters].sort((a,b) => (b.power||0) - (a.power||0));
 
   for (const m of sorted) {
     const zones = getEmptyZones(s.ai.field);
