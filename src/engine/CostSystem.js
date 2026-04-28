@@ -465,6 +465,34 @@ export function parseSpellEffect(text = '') {
   if (/\[cast\s+cost\]/i.test(effectText)) effect.hasCastCost = true;
 
   // ── 인식률 100% 달성을 위한 포괄 패턴 ──
+  // 발동 조건 전용 카드 ("You may only cast this card when/if X")
+  if (/you\s+may\s+only\s+cast\s+this\s+card\s+(?:when|if|during)/i.test(effectText)) {
+    effect.castCondition = true;
+    // 발동 조건 분석
+    const cond = effectText.toLowerCase();
+    if (/when\s+you\s+have\s+(\d+)\s+(?:life|or\s+more|or\s+less)/i.test(cond)) {
+      const m = cond.match(/(\d+)\s+life\s+or\s+(less|more)/i);
+      if (m) effect.castLifeCondition = { n: parseInt(m[1]), dir: m[2] };
+    }
+    if (/size\s+3/i.test(cond)) effect.requiresSize3 = true;
+    if (/only\s+one\s+card.*?attacking/i.test(cond)) effect.singleAttackCond = true;
+    if (/during\s+your\s+opponent'?s?\s+turn/i.test(cond)) effect.opponentTurnOnly = true;
+    if (/(?:monster|card).*?would.*?(?:destroy|destruct)/i.test(cond)) effect.onDestroyTrigger = true;
+  }
+  // "Return X to hand" 계열 (특수문자 포함)
+  if (/[Rr]eturn.*?(?:to|into).*?hand/i.test(effectText)) {
+    if (!effect.returnToHand) effect.returnToHand = { target: 'player' };
+  }
+  // "during your opponent's turn"
+  if (/during\s+your\s+opponent'?s?\s+turn/i.test(effectText)) effect.duringOpponentTurn = true;
+  // "when you have X life or more/less"
+  if (/(?:when|if)\s+you\s+have\s+(\d+)\s+(?:life|or)/i.test(effectText)) {
+    effect.lifeConditionCast = true;
+  }
+  // "when you have a size 3 monster" 계열
+  if (/when\s+you\s+have\s+(?:a|an).*?(?:size\s+\d+|monster)/i.test(effectText)) {
+    effect.fieldConditionCast = true;
+  }
   // critical 관련
   if (/critical[+\-]\d+/i.test(effectText)) { const m=effectText.match(/critical[+\-](\d+)/i); effect.criticalBuff=parseInt(m[1]); }
   // size 효과

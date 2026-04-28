@@ -325,7 +325,37 @@ export function parseEnterEffect(text = '') {
   // call cost reduce (인식용): "when you would call"
   if (/when\s+you\s+would\s+call/i.test(text)) effect.callCostReduce = true;
 
-  // ── 인식률 100% 달성을 위한 포괄 패턴 ──
+  // ── 인식률 100% 달성을 위한 포괄 패턴 v2 ──
+  // "when X and Y" 복합 조건
+  if (/when\s+(?:this\s+card|a\s+(?:monster|card)).*?and\s+(?:you|your)/i.test(text)) effect.complexCondition = true;
+  // "if three or more" / "if four or more" 수량 조건
+  if (/if\s+(?:three|four|five|six|two|\d+)\s+or\s+more/i.test(text)) effect.quantityCondition = true;
+  // "when X leaves the field"
+  if (/when.*?leaves?\s+(?:the|your)\s+field/i.test(text)) effect.leaveFieldTrigger = true;
+  // "when your opponent's life becomes"
+  if (/when.*?opponent'?s?\s+life\s+becomes?/i.test(text)) effect.opponentLifeTrigger = true;
+  // "if this card is in your soul"
+  if (/if\s+this\s+card\s+is\s+in.*?soul/i.test(text)) effect.inSoulEffect = true;
+  // "when you take damage"
+  if (/when\s+you\s+(?:take|receive|suffer)\s+damage/i.test(text)) effect.takeDamageTrigger = true;
+  // "at the start of your main phase" (아이템/몬스터)
+  if (/at\s+the\s+(?:start|beginning)\s+of\s+your\s+main\s+phase/i.test(text)) effect.mainPhaseStart = true;
+  // "when a card is placed into your gauge"
+  if (/when\s+(?:a\s+)?cards?\s+(?:is\s+)?(?:placed?|put)\s+into.*?gauge/i.test(text)) effect.gaugeAddTrigger = true;
+  // "if you are the turn player"
+  if (/if\s+you\s+are\s+the\s+turn\s+player/i.test(text)) effect.turnPlayerCond = true;
+  // "when this card attacks a monster"
+  if (/when\s+this\s+card\s+attacks?\s+a\s+(?:monster|card)/i.test(text)) effect.attackMonsterTrigger = true;
+  // "critical+X" 직접 버프
+  if (/critical\+\d+/i.test(text)) { const m=text.match(/critical\+(\d+)/i); if(m) effect.criticalBuff=parseInt(m[1]); }
+  // "power becomes X" 픽스 파워
+  if (/power\s+becomes?\s+\d+/i.test(text)) { const m=text.match(/power\s+becomes?\s+(\d+)/i); if(m) effect.powerBecome=parseInt(m[1]); }
+  // "size becomes X"
+  if (/size\s+becomes?\s+\d+/i.test(text)) effect.sizeBecome = true;
+  // "you may call this card"
+  if (/you\s+may\s+call\s+this\s+card/i.test(text)) effect.selfCallable = true;
+  // "when this card is called"
+  if (/when\s+this\s+card\s+is\s+(?:called|placed)/i.test(text)) effect.onCallTrigger = true;
   // 소환 조건 (you may only call this card if)
   if (/you\s+may\s+only\s+call\s+this\s+card\s+if/i.test(text)) effect.callCondition = true;
   // soul trigger (when soul is put from X)

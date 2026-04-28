@@ -18,16 +18,26 @@ const WORLD_NAMES = {
 };
 
 function buildDeckFromPrebuilt(deckData) {
-  const cards = [];
-  for (const entry of deckData.cards) {
-    const card = cardMap[entry.id];
+  if (!deckData) return [];
+  const cm = cardMap;
+  // 새 형식: cardIds 배열
+  if (deckData.cardIds) {
+    return deckData.cardIds
+      .map(id => cm[id])
+      .filter(c => c && c.type !== 5)
+      .map(c => ({...c, instanceId: `inst_${c.id}_${Math.random().toString(36).slice(2)}`}));
+  }
+  // 구 형식: cards 배열
+  const result = [];
+  for (const entry of (deckData.cards || [])) {
+    const card = cm[entry.id];
     if (card && card.type !== 5) {
-      for (let i = 0; i < Math.min(entry.count, 4); i++) {
-        cards.push(card);
+      for (let i = 0; i < Math.min(entry.count || 1, 4); i++) {
+        result.push({...card, instanceId: `inst_${card.id}_${Math.random().toString(36).slice(2)}`});
       }
     }
   }
-  return cards;
+  return result;
 }
 
 export default function MainMenu() {

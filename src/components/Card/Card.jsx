@@ -80,7 +80,25 @@ export default function Card({ card, isSelected, isRest, onClick, displayMode='h
                       style={{width:52,height:74,objectFit:'cover',borderRadius:5,border:'1px solid #555',transition:'transform 0.15s'}}
                       onMouseEnter={e=>e.target.style.transform='scale(1.1)'}
                       onMouseLeave={e=>e.target.style.transform='scale(1)'}
-                      onError={e=>{e.target.style.display='none';}}/>
+                      onError={e=>{
+                        e.target.style.display='none';
+                        const fb=e.target.nextSibling;
+                        if(fb) fb.style.display='flex';
+                      }}/>
+                      {/* 이미지 폴백: 카드 정보 텍스트 */}
+                      <div style={{display:'none',position:'absolute',inset:0,
+                        background:'linear-gradient(135deg,#1a1a2e,#2d2d44)',
+                        borderRadius:4,flexDirection:'column',alignItems:'center',
+                        justifyContent:'center',padding:'2px',gap:1}}>
+                        <div style={{fontSize:7,color:'#ffd700',fontWeight:'bold',textAlign:'center',
+                          lineHeight:1.2,overflow:'hidden',maxWidth:'95%'}}>
+                          {card?.name?.slice(0,20)}
+                        </div>
+                        <div style={{fontSize:7,color:'#aaa'}}>
+                          {card?.type===1?'몬스터':card?.type===2?'아이템':card?.type===3?'스펠':card?.type===4?'임팩트':'카드'}
+                        </div>
+                        {card?.power && <div style={{fontSize:7,color:'#e17055'}}>⚔️{card.power}</div>}
+                      </div>
                     <div style={{fontSize:8,color:'#aaa',maxWidth:52,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.name}</div>
                   </div>
                 ))}
