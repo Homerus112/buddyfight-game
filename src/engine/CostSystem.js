@@ -211,9 +211,13 @@ export function parseSpellEffect(text = '') {
   if (dmgRedM) effect.damageReduce = parseInt(dmgRedM[1]);
   if (/the\s+next\s+time\s+damage.*?(?:it\s+is\s+)?(?:reduc|negat|prevent|0)/i.test(effectText)) effect.nextDamageNegate = true;
 
-  // ── 드로우 ──
-  const drawM = effectText.match(/draw\s+(\d+)\s+cards?/i) || (/draw\s+a\s+card/i.test(effectText) ? ['','1'] : null);
-  if (drawM) effect.draw = parseInt(drawM[1]);
+  // ── 드로우 ── ✅ fix65: 영문 숫자(two/three/four) 패턴 추가
+  const _drawNums = { one:1, two:2, three:3, four:4, five:5 };
+  const drawM = effectText.match(/draw\s+(\d+)\s+cards?/i)
+             || effectText.match(/draw\s+(one|two|three|four|five)\s+cards?/i)
+             || (/draw\s+a\s+card/i.test(effectText) ? ['','1'] : null)
+             || (/draw\s+cards?\s+(?:equal|until)/i.test(effectText) ? ['','1'] : null);
+  if (drawM) effect.draw = _drawNums[drawM[1]?.toLowerCase()] ?? parseInt(drawM[1]) ?? 1;
 
   // ── 차지 (게이지) - 다중 장 패턴 먼저 체크 ──
   const _gNums = {one:1,two:2,three:3,four:4,five:5,six:6};
@@ -228,17 +232,20 @@ export function parseSpellEffect(text = '') {
     effect.gainGauge = 1;
   }
 
-  // ── 손패 버리기 ──
-  if (/discard\s+all\s+your\s+hand|drop\s+all\s+your\s+hand\s+cards?/i.test(effectText)) effect.discardAll = true;
+  // ── 손패 버리기 ── ✅ fix65: 패턴 강화
+  if (/discard\s+(?:all|your\s+entire)\s+(?:your\s+)?hand|drop\s+all\s+(?:your\s+)?hand\s+cards?/i.test(effectText)) effect.discardAll = true;
   const _discNums = {one:1,two:2,three:3};
   const discardNM = effectText.match(/discard\s+(?:a\s+|one\s+|two\s+|three\s+|(\d+)\s+)?(?:hand\s+)?cards?/i);
   if (discardNM && !effect.discardAll) {
     const raw = discardNM[1]; effect.discardN = raw ? parseInt(raw) : (/two/i.test(discardNM[0])?2:/three/i.test(discardNM[0])?3:1);
   }
-  if (/drop\s+(?:a\s+|one\s+)?hand\s+cards?/i.test(effectText) && !effect.discardAll) {
-    const dm = effectText.match(/drop\s+(two|three|\d+)\s+hand/i);
+  // "drop two hand cards" / "drop a hand card" / "drop two cards"
+  if (/drop\s+(?:a\s+|one\s+|two\s+|three\s+|\d+\s+)?(?:hand\s+)?cards?/i.test(effectText) && !effect.discardAll) {
+    const dm = effectText.match(/drop\s+(two|three|\d+)\s+(?:hand\s+)?cards?/i);
     effect.discardN = (effect.discardN ?? 0) + (_discNums[dm?.[1]?.toLowerCase()] ?? parseInt(dm?.[1]) ?? 1);
   }
+  // "each player discards" 패턴
+  if (/each\s+player\s+discards?/i.test(effectText)) effect.eachPlayerDiscard = true;
 
   // ── 덱 드롭 ──
   const deckDropM = effectText.match(/put\s+the\s+top\s+(\w+)\s+cards?\s+of\s+your\s+deck\s+into\s+(?:your\s+)?drop/i);
@@ -599,5 +606,73 @@ export function parseSpellEffect(text = '') {
     effect.damageModifier = parseInt(dm[1]);
   }
 
+  // ✅ fix65: 미인식 스펠 포괄 패턴 추가 ─────────────────
+  // "Move a size X monster in your opponent's" → moveOpponent
+  if (/move\s+a\s+size\s+\d+.*?(?:monster|card).*?(?:opponent|center|left|right)/i.test(effectText)) effect.moveOpponent = true;
+  // "Your opponent chooses and drops a hand card" → opponentDiscard
+  if (/(?:your\s+)?opponent\s+(?:chooses?\s+and\s+)?(?:drops?|discards?)\s+(?:a\s+)?hand\s+card/i.test(effectText)) effect.opponentDiscard = true;
+  // "Each player discards his or her hand" → eachPlayerDiscard
+  if (/each\s+player\s+(?:discards?\s+(?:his|her|their|his\s+or\s+her)?\s+hand|draws?\s+\d+)/i.test(effectText)) effect.eachPlayerDiscard = true;
+  // "Equip up to two ... items from your hand/drop" → equipFromDrop
+  if (/equip\s+up\s+to\s+(?:two|one|three|\d+)\s+.*?(?:items?|weapons?|armors?)\s+from/i.test(effectText)) effect.equipItems = true;
+  // "Choose X monsters from your drop zone, and call them" → callMultiFromDrop
+  if (/choose\s+(?:two|one|three|\d+).*?from\s+(?:your\s+)?drop\s+zone.*?call/i.test(effectText)) effect.callFromDrop = true;
+  // "put X cards from your drop zone" → deckToHand variation
+  if (/put\s+(?:up\s+to\s+)?(?:two|three|four|one|\d+)\s+.*?from\s+(?:your\s+)?drop\s+zone.*?(?:to\s+hand|deck|field)/i.test(effectText)) effect.callFromDrop = true;
+  // "put X cards from your drop zone on the bottom of your deck"
+  if (/put\s+.*?from\s+(?:your\s+)?drop\s+zone.*?(?:deck|bottom|shuffle)/i.test(effectText)) effect.deckToHand = true;
+  // "Rock-Paper-Scissors" 같은 special interaction
+  if (/rock-paper-scissors|destroys?\s+a\s+card\s+on\s+the\s+field/i.test(effectText)) effect.destroyTarget = 'any';
+  // "Nullify the abilities of all cards on your opponent's field"
+  if (/nullify\s+(?:the\s+)?abilities?\s+of/i.test(effectText)) effect.nullifyAbilities = true;
+  // "drop all souls from" → soulDrop
+  if (/drop\s+all\s+souls?\s+from/i.test(effectText)) effect.dropAllSouls = true;
+  // "return X cards to deck" (Arms Commander 등)
+  if (/return\s+.*?to\s+(?:your\s+)?deck/i.test(effectText)) { effect.deckToHand = true; }
+  // "[Transform] into a card" in spell text
+  if (/\[transform\]\s+into/i.test(effectText)) effect.transformInto = true;
+  // "draw cards equal to the number of" → draw conditional
+  if (/draw\s+cards?\s+equal\s+to/i.test(effectText)) effect.draw = (effect.draw ?? 1);
+  // "Search your hand or deck" → searchDeck
+  if (/search\s+(?:your\s+)?(?:hand\s+or\s+)?deck/i.test(effectText)) effect.searchDeck = true;
+  // "you may cast this card without paying" → 조건부 발동 (인식용)
+  if (/(?:you\s+may\s+cast|cast\s+this\s+card)\s+without\s+paying/i.test(effectText)) effect.castCondition = true;
+  // "put X from your drop zone to hand" (Electrodeity Return 등)
+  if (/put\s+up\s+to\s+.*?from\s+(?:your\s+)?drop\s+zone\s+to\s+hand/i.test(effectText)) effect.deckToHand = true;
+  // "drop X souls from" → soul manipulation
+  if (/drop\s+(?:\d+|a|all)\s+souls?\s+from/i.test(effectText)) effect.dropSoul = true;
+  // "declare a card type, and look at" → inspection effect
+  if (/declare\s+a\s+card\s+type/i.test(effectText)) { effect.deckPeek = true; }
+  // "Put X cards from the top of your opponent's deck" → opponent mill
+  if (/top\s+.*?\s+cards?\s+of\s+your\s+opponent'?s?\s+deck/i.test(effectText)) effect.opponentMill = true;
+  // buddy-related flags
+  if (/buddy\s+(?:call|zone)|buddy\s+card/i.test(effectText)) effect.buddyEffect = true;
+
+
+  // ✅ fix65: 나머지 미인식 패턴 추가 ────────────────────
+  // "Drop the top four cards of your deck, put up to one into gauge"
+  if (/drop\s+the\s+top\s+(?:four|three|five|\d+)\s+cards?/i.test(effectText)) { effect.deckToDrop = 4; }
+  // "Put a card from your opponent's gauge into drop zone"
+  if (/put\s+(?:a\s+)?card\s+from\s+your\s+opponent'?s?\s+gauge/i.test(effectText)) effect.stealGauge = true;
+  // "Put X cards from the top of your opponent's deck into drop zone"
+  if (/put\s+(?:two|three|four|five|six|\d+)\s+cards?\s+from\s+the\s+top\s+of\s+your\s+opponent/i.test(effectText)) effect.opponentMill = true;
+  // "Look at N cards from the top of your deck, put one into your hand"
+  if (/look\s+at\s+(?:three|two|four|\d+)\s+cards?\s+from\s+the\s+top/i.test(effectText)) effect.deckPeek = true;
+  // "Reveal the top N cards of your deck, put up to one into hand"
+  if (/reveal\s+the\s+top\s+(?:three|two|four|\d+)\s+cards?/i.test(effectText)) { effect.deckPeek = true; effect.deckToHand = true; }
+  // "Discard a card from your hand and choose ... call"
+  if (/discard\s+a\s+card\s+from\s+your\s+hand/i.test(effectText)) effect.discardN = 1;
+  // "Choose X ... from your drop zone ... call them"
+  if (/choose\s+(?:up\s+to\s+)?(?:two|one|three|\d+).*?(?:drop\s+zone|drop).*?call/i.test(effectText)) effect.callFromDrop = true;
+  // "choose ... from drop zone with same card name, call them"
+  if (/choose.*?from\s+(?:your\s+)?drop\s+zone.*?(?:call|same\s+card\s+name)/i.test(effectText)) effect.callFromDrop = true;
+
+  // ✅ fix65 patch2: 최후 3개 스펠 패턴 ──────────────────
+  // "put one from among them into your hand" (Unfreezing 등)
+  if (/put\s+(?:one|up\s+to\s+one)\s+from\s+among\s+them\s+into\s+your\s+hand/i.test(effectText)) effect.deckToHand = true;
+  // "Choose up to one size X and ... from drop zone, put into hand" (Black Revenger, Edict)
+  if (/choose\s+up\s+to\s+one\s+size\s+\d+.*?(?:drop\s+zone|drop).*?(?:put\s+them|into\s+your\s+hand)/i.test(effectText)) effect.deckToHand = true;
+
   return Object.keys(effect).length > 0 ? effect : null;
 }
+

@@ -410,6 +410,43 @@ export function parseEnterEffect(text = '') {
   if (/when\s+(?:a\s+)?(?:monster|card).*?is\s+(?:called|summoned)/i.test(text)) effect.whenMonsterCalled = true;
   // cannot link attack (인식용)
   if (/cannot\s+link\s+attack/i.test(text)) effect.cannotLinkAttack = true;
+
+  // ✅ fix65: 추가 미인식 몬스터 패턴 ──────────────────────
+  // "you cannot call this card to the center"
+  if (/you\s+cannot\s+call\s+this\s+card\s+to\s+the\s+center/i.test(text)) effect.cannotCenter = true;
+  // "An opponent's monster in front of this card gets defense-N" (cont 효과)
+  if (/(?:an?\s+)?opponent'?s?\s+monster.*?(?:gets?|get)\s+(?:power|defense)[+\-]\d+/i.test(text)) {
+    const m = text.match(/(?:power|defense)[+\-](\d+)/i);
+    if (m) effect.debuffOpponent = parseInt(m[1]);
+  }
+  // "monsters on your center get critical+N"
+  if (/(?:monsters?|cards?)\s+on\s+your\s+(?:center|field|left|right)\s+get[s]?\s+critical\+(\d+)/i.test(text)) {
+    const m = text.match(/critical\+(\d+)/i);
+    if (m) effect.criticalBuff = parseInt(m[1]);
+  }
+  // "This card gets critical equal to ..."
+  if (/this\s+card\s+gets?\s+critical\s+equal\s+to/i.test(text)) effect.criticalEqual = true;
+  // "At end of turn, destroy this card"
+  if (/at\s+(?:the\s+)?end\s+of\s+(?:your\s+)?turn.*?destroy\s+this\s+card/i.test(text)) effect.selfDestructEndTurn = true;
+  // "The [Cast Cost] of each of your X spells is reduced by N gauge"
+  if (/\[cast\s+cost\].*?reduced\s+by\s+\d+\s+gauge|cost.*?reduc/i.test(text)) effect.spellCostReduce = true;
+  // "«X» [Cont] spellcost reduce" patterns
+  if (/(?:concentrate|spell\s+assist|(?:the\s+)?\[cast\s+cost\].*?spells?.*?reduced)/i.test(text)) effect.spellCostReduce = true;
+  // "No ability text" → 명시적 바닐라 (인식은 하되 효과 없음)
+  if (/no\s+ability\s+text/i.test(text)) effect.vanillaCard = true;
+  // "You may buddy call using this card" → 버디 관련
+  if (/you\s+may\s+buddy\s+call/i.test(text)) effect.buddyCallable = true;
+  // flavor/lore only text (anniversary cards 등)
+  if (/anniversary|postcard\s+master|thank\s+you\s+for/i.test(text)) effect.flavorOnly = true;
+  // "(It may seem weak..." 형태의 flavor parenthesis
+  if (/^\s*\(it\s+may\s+seem|^\s*\(this\s+card\s+(?:is|can)/i.test(text)) effect.flavorOnly = true;
+  // "[Evil Deity]" 등 특수 키워드
+  if (/\[(?:evil\s+deity|g\.boost|g-guardian|legend\s+world)\]/i.test(text)) effect.specialKeyword = true;
+  // "When the attack of a card on your field is nullified" → nullify trigger
+  if (/when\s+the\s+attack\s+of\s+(?:a\s+)?card.*?(?:nullif|cannot\s+stand)/i.test(text)) effect.nullifyTrigger = true;
+  // "At the beginning of your final phase" → final phase trigger
+  if (/at\s+the\s+beginning\s+of\s+your\s+final\s+phase/i.test(text)) effect.finalPhaseStart = true;
+
   return Object.keys(effect).length > 0 ? effect : null;
 }
 
