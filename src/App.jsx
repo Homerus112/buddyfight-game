@@ -19,8 +19,8 @@ export default function App() {
     // 카드 데이터 fetch (번들 분리로 초기 로딩 속도 향상)
     if (getCardsCache()) { setDataLoaded(true); return; }
     Promise.all([
-      fetch('/cards.json').then(r => r.json()),
-      fetch('/prebuilt_decks.json').then(r => r.json()).catch(() => ({})),
+      fetch('/cards.json').then(r => { if (!r.ok) throw new Error('cards.json 로드 실패'); return r.json(); }),
+      fetch('/prebuilt_decks.json').then(r => r.ok ? r.json() : {}).catch(() => ({})),
     ]).then(([cards, decks]) => {
       setCardsCache(cards);
       setDecksCache(decks);

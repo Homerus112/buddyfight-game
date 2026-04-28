@@ -45,6 +45,8 @@ export default function DeckBuilder() {
   const [deckName, setDeckName] = useState('내 덱');
   const [savedDecks, setSavedDecks] = useState(loadSavedDecks);
   const [saveMsg, setSaveMsg] = useState('');
+  const [showImportPopup, setShowImportPopup] = useState(false);
+  const [importCode, setImportCode] = useState('');
     const [selectedSleeve, setSelectedSleeve] = useState(0); // 0 또는 1
   const [sortBy, setSortBy] = useState('name');
 
@@ -211,23 +213,8 @@ export default function DeckBuilder() {
           }} style={{background:'rgba(0,184,148,0.2)',color:'#00b894',border:'1px solid rgba(0,184,148,0.4)',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:11}}>
             {T('📤 내보내기','📤 Export')}
           </button>
-          <button onClick={() => {
-            const code = prompt(T('덱 코드를 붙여넣으세요:','Paste deck code:'));
-            if (!code) return;
-            try {
-              const data = JSON.parse(decodeURIComponent(escape(atob(code))));
-              if (data.name) setDeckName(data.name);
-              if (data.flagId) { const f = cardMap[data.flagId]; if (f) setSelectedFlag(f); }
-              if (data.buddyId) { const b = cardMap[data.buddyId]; if (b) setSelectedBuddy(b); }
-              if (data.cards?.length) {
-                const imported = data.cards.map(id => cards.find(c => c.id === id)).filter(Boolean)
-                  .map(c => ({ ...c, instanceId: `inst_${c.id}_${Math.random().toString(36).slice(2)}` }));
-                setDeck(imported);
-                setSaveMsg(T('✅ 덱 가져오기 완료!','✅ Deck imported!'));
-                setTimeout(() => setSaveMsg(''), 2500);
-              }
-            } catch(e) { alert(T('잘못된 덱 코드입니다.','Invalid code.')); }
-          }} style={{background:'rgba(116,185,255,0.15)',color:'#74b9ff',border:'1px solid rgba(116,185,255,0.3)',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:11}}>
+          <button onClick={() => { setImportCode(''); setShowImportPopup(true); }}
+            style={{background:'rgba(116,185,255,0.15)',color:'#74b9ff',border:'1px solid rgba(116,185,255,0.3)',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:11}}>
             {T('📥 가져오기','📥 Import')}
           </button>
           <button onClick={handleStartGame} style={{background:'#e17055',color:'#fff',border:'none',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:12,fontWeight:'bold'}}>▶ 게임 시작</button>
