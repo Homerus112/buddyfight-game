@@ -391,11 +391,14 @@ export function declareAttack(state, attackerZone) {
     }
   }
 
-  return {
+  // ✅ fix66: 공격 선언 시 조건부 키워드 체크 (When this card attacks, if X, gets [KW])
+  let newState = {
     ...state,
     attackingCard: { zone: attackerZone, card: attacker },
     log: [...state.log, `⚔️ ${attacker.name} 공격 선언!`],
   };
+  newState = applyAttackConditionalKeywords(newState, attacker, attackerZone, ap);
+  return newState;
 }
 
 export function cancelAttack(state) {
@@ -726,6 +729,18 @@ export function hasMove(state, fromZone) {
     return fieldCards.some(c => (c.text||'').toLowerCase().includes(`[${kw}]`));
   }
 
+  // ✅ fix66: 패턴 7: "your equipped «X» is [Stand]"
+  const equippedStandM = cond.match(/your\s+equipped\s+[«"]([^»"]+)[»"]\s+is\s+\[stand\]/i);
+  if (equippedStandM) {
+    const itemName = equippedStandM[1].trim().toLowerCase();
+    return p.item &&
+      (p.item.name || '').toLowerCase().includes(itemName) &&
+      p.item.state === 'stand';
+  }
+
+  // ✅ fix66: 패턴 8: "you have a/an item equipped" (장착 아이템 존재)
+  if (/you have (?:a|an) (?:item|weapon|armor) equipped/i.test(cond)) return !!p.item;
+
   return false;
 }
 
@@ -802,28 +817,22 @@ export function castSpell(state, instanceId) {
     if (effect.draw) { const drawn = updatedP.deck.slice(0, effect.draw); updatedP = { ...updatedP, hand: [...updatedP.hand, ...drawn], deck: updatedP.deck.slice(effect.draw) }; logs.push(`🃏 드로우 ${drawn.length}장`); }
     if (effect.discardAll) { updatedP = { ...updatedP, drop: [...updatedP.drop, ...updatedP.hand], hand: [] }; logs.push('🗑️ 손패 전부 버림'); }
     if (effect.deckToDrop) { const dropped = updatedP.deck.slice(0, effect.deckToDrop); updatedP = { ...updatedP, deck: updatedP.deck.slice(effect.deckToDrop), drop: [...updatedP.drop, ...dropped] }; logs.push(`🗑️ 덱 ${dropped.length}장 드롭`); }
-    if (effect.deckToDrop && updatedPlayer.deck.length > 0) {
-      const _dd = Math.min(effect.deckToDrop, updatedPlayer.deck.length);
-      const _ddrp = updatedPlayer.deck.slice(0, _dd);
-      updatedPlayer = { ...updatedPlayer, deck: updatedPlayer.deck.slice(_dd), drop: [...updatedPlayer.drop, ..._ddrp] };
-      logs.push(`🗑️ 덱 상단 ${_dd}장 → 드롭`);
-    }
-    if (effect.deckToHand && updatedPlayer.deck.length > 0) {
-      const _sh = updatedPlayer.deck[0];
+    if (effect.deckToHand && updatedP.deck.length > 0) {
+      const _sh = updatedP.deck[0];
       if (_sh) {
-        updatedPlayer = { ...updatedPlayer, hand: [...updatedPlayer.hand, _sh], deck: updatedPlayer.deck.slice(1) };
+        updatedP = { ...updatedP, hand: [...updatedP.hand, _sh], deck: updatedP.deck.slice(1) };
         logs.push(`🔍 ${_sh.name} → 손패`);
       }
     }
     if (effect.shuffleDeck) {
-      updatedPlayer = { ...updatedPlayer, deck: [...updatedPlayer.deck].sort(() => Math.random()-0.5) };
+      updatedP = { ...updatedP, deck: [...updatedP.deck].sort(() => Math.random()-0.5) };
       logs.push(`🔀 덱 셔플`);
     }
     if (effect.returnToHand?.target === 'opponent') {
-      const _rz = ['center','left','right'].find(z => updatedAI.field[z]);
+      const _rz = ['center','left','right'].find(z => defP.field[z]);
       if (_rz) {
-        const _rc = updatedAI.field[_rz];
-        updatedAI = { ...updatedAI, field: { ...updatedAI.field, [_rz]: null }, hand: [...updatedAI.hand, _rc] };
+        const _rc = defP.field[_rz];
+        defP = { ...defP, field: { ...defP.field, [_rz]: null }, hand: [...defP.hand, _rc] };
         logs.push(`↩️ ${_rc.name} → 상대 손패`);
       }
     }
@@ -1430,6 +1439,55 @@ export function applyAttackTrigger(state, attackerCard, attackerSide) {
   const newState = { ...state, [attackerSide]: p, [def]: opp, log: [...state.log, ...logs] };
   if (opp.life <= 0) return { ...newState, winner: attackerSide };
   return newState;
+}
+
+// ── 공격 시 조건부 키워드 부여 (When this card attacks, if X, gets [KW]) ──
+export function applyAttackConditionalKeywords(state, attackerCard, attackerZone, attackerSide) {
+  const text = attackerCard.text || '';
+  // "When this card attacks, if ... , for this turn, this card gets [KW]" 패턴
+  const condKwRe = /[Ww]hen this card attacks[,.]?\s+if\s+(.*?)[,.]\s+for\s+this\s+turn[,.]?\s+this\s+card\s+gets?\s+\[([\w\s]+)\]/gi;
+  let match;
+  let p = { ...state[attackerSide] };
+  let changed = false;
+  const logs = [];
+
+  while ((match = condKwRe.exec(text)) !== null) {
+    const condText = match[1].toLowerCase();
+    const kw = match[2];
+    let condMet = false;
+
+    // "your equipped «X» is [Stand]" 조건
+    const equippedStandM = condText.match(/your\s+equipped\s+[«"]([^»"]+)[»"]\s+is\s+\[stand\]/i);
+    if (equippedStandM) {
+      const itemName = equippedStandM[1].trim().toLowerCase();
+      condMet = p.item &&
+        (p.item.name || '').toLowerCase().includes(itemName) &&
+        p.item.state === 'stand';
+    }
+    // "you have a «X» on your field" 조건
+    const fieldNameM = condText.match(/you\s+have\s+(?:a|an)\s+[«"]?([^»",]+)[»"]?\s+on\s+your\s+field/i);
+    if (!condMet && fieldNameM) {
+      const nm = fieldNameM[1].trim().toLowerCase();
+      condMet = ['left','center','right'].some(z => p.field[z] && (p.field[z].name||'').toLowerCase().includes(nm));
+    }
+    // "your life is N or less" 조건
+    const lifeCondM = condText.match(/your\s+life\s+is\s+(\d+)\s+or\s+less/i);
+    if (!condMet && lifeCondM) condMet = p.life <= parseInt(lifeCondM[1]);
+
+    if (condMet) {
+      // 이번 턴 한정 키워드 부여
+      const card = attackerZone === 'item' ? p.item : p.field[attackerZone];
+      if (card && !(card._conditionalKws || []).includes(kw)) {
+        const updated = { ...card, _conditionalKws: [...(card._conditionalKws || []), kw] };
+        if (attackerZone === 'item') p = { ...p, item: updated };
+        else p = { ...p, field: { ...p.field, [attackerZone]: updated } };
+        logs.push(`✨ 조건 충족: ${attackerCard.name} [${kw}] 획득!`);
+        changed = true;
+      }
+    }
+  }
+  if (!changed) return state;
+  return { ...state, [attackerSide]: p, log: [...state.log, ...logs] };
 }
 
 // ── 파괴 시 발동 효과 (When this card is destroyed) ──

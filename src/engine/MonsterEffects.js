@@ -4,6 +4,7 @@
 //       Lifelink, Move, change attack target, put top card to gauge/soul
 
 import { CARD_STATE } from '../utils/constants.js';
+import { L } from '../i18n/useI18n.js';
 
 /** 몬스터 텍스트에서 소환 시([enters] 또는 call) 효과 추출 */
 export function parseEnterEffect(text = '') {

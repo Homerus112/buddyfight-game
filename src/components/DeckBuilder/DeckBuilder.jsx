@@ -40,73 +40,149 @@ export default function DeckBuilder() {
     const worldId = selectedFlag?.world || selectedBuddy?.world;
     if (!worldId) return;
 
-    const worldCards = allCards.filter(c => c.world === worldId);
-    const genericCards = allCards.filter(c => c.world === 8);
+    const allC = getCardsCache() || [];
+    const worldCards = allC.filter(c => c.world === worldId || c.world === 8);
+    const refText = (
+      (selectedFlag?.text||'') + (selectedBuddy?.text||'') +
+      (selectedFlag?.name||'') + (selectedBuddy?.name||'')
+    ).toLowerCase();
 
-    // 키워드 추출 (플래그+버디 이름/텍스트 기반)
-    const refText = ((selectedFlag?.text||'')+(selectedBuddy?.text||'')+(selectedFlag?.name||'')+(selectedBuddy?.name||'')).toLowerCase();
-    const tribes = (selectedBuddy?.tribe||selectedFlag?.tribe||'').toLowerCase().split('/');
+    // 테마 키워드 추출 (tribe 기반)
+    const buddyTribe = (selectedBuddy?.tribe || selectedFlag?.tribe || '').toLowerCase();
+    const themeKws = buddyTribe.split('/').map(s => s.trim()).filter(Boolean);
 
+    // 카드 점수 함수
     const scoreCard = (c) => {
-      const txt = ((c.text||'')+(c.name||'')+(c.tribe||'')).toLowerCase();
+      const txt = ((c.text||'') + (c.name||'') + (c.tribe||'')).toLowerCase();
       let s = 0;
-      tribes.forEach(tr => { if (tr && txt.includes(tr.trim())) s += 15; });
-      if (txt.includes('[penetrate]')) s += 6;
-      if (txt.includes('[double attack]')) s += 5;
-      if (txt.includes('[triple attack]')) s += 7;
-      if (txt.includes('[soulguard]')) s += 4;
-      if (txt.includes('[shadow dive]')) s += 5;
-      if (txt.includes('[d-share]')) s += 3;
+      themeKws.forEach(tr => { if (tr && txt.includes(tr)) s += 20; });
+      if (txt.includes('[penetrate]')) s += 8;
+      if (txt.includes('[triple attack]')) s += 9;
+      if (txt.includes('[double attack]')) s += 7;
+      if (txt.includes('[soulguard]')) s += 6;
+      if (txt.includes('[shadow dive]')) s += 7;
+      if (txt.includes('[counterattack]')) s += 5;
+      if (txt.includes('[d-share]')) s += 4;
+      if (txt.includes('[move]')) s += 3;
       if (txt.includes('[lifelink')) s += 2;
-      s += (c.power||0) / 3000;
+      s += (c.power || 0) / 4000;
+      // 카운터 스펠 보너스
+      if ((c.type===3) && txt.includes('[counter]')) s += 4;
+      // 게이지 차지 스펠 보너스
+      if ((c.type===3) && /into.*gauge|gauge.*charge/i.test(c.text||'')) s += 5;
+      // Dragon Shield 같은 방어 스펠 보너스
+      if ((c.type===3) && /nullify.*attack|cannot.*attack/i.test(c.text||'')) s += 6;
       return s;
     };
 
+    // 복사본 생성 헬퍼
+    const mkInst = (c, suffix='') => ({
+      ...c,
+      instanceId: `inst_${c.id}_${suffix || Math.random().toString(36).slice(2,7)}`
+    });
+
     const newDeck = [];
-    const usedIds = new Set();
-    const addCards = (list, limit) => {
+
+    // ① 버디 5장 먼저 (규칙: 버디는 덱에 최대 4장 + 버디존 1장 = 5장까지)
+    if (selectedBuddy) {
+      for (let i = 0; i < 4; i++) newDeck.push(mkInst(selectedBuddy, `buddy${i}`));
+    }
+
+    // ② 카드 타입별로 분류 & 점수 정렬
+    const monsters = worldCards.filter(c => c.type === 1).sort((a,b) => scoreCard(b)-scoreCard(a));
+    const items    = worldCards.filter(c => c.type === 2).sort((a,b) => scoreCard(b)-scoreCard(a));
+    const spells   = worldCards.filter(c => c.type === 3 || c.type === 4).sort((a,b) => scoreCard(b)-scoreCard(a));
+    const counterSp = spells.filter(c => /\[Counter\]/i.test(c.text||''));
+    const normalSp  = spells.filter(c => !/\[Counter\]/i.test(c.text||''));
+
+    // ③ 테마 카드 추출 (점수 상위 풀)
+    const themeMonsters = monsters.filter(c => {
+      const txt = ((c.text||'')+(c.name||'')+(c.tribe||'')).toLowerCase();
+      return themeKws.some(k => k && txt.includes(k));
+    });
+    const otherMonsters = monsters.filter(c => !themeMonsters.includes(c));
+
+    // ④ 덱 구성 함수 (중복 허용, 같은 카드 최대 maxCopies장)
+    const usedCount = {}; // id → count
+    const addCard = (c, copies = 1) => {
+      if (newDeck.length >= 52) return;
+      usedCount[c.id] = (usedCount[c.id] || 0);
+      const canAdd = Math.min(copies, 4 - usedCount[c.id], 52 - newDeck.length);
+      for (let i = 0; i < canAdd; i++) {
+        newDeck.push(mkInst(c, `${c.id}_${i}`));
+        usedCount[c.id]++;
+      }
+    };
+    const addPool = (pool, maxCards, copies = 2) => {
       let added = 0;
-      for (const c of list) {
-        if (added >= limit || newDeck.length >= 52) break;
-        if (!usedIds.has(c.id)) {
-          newDeck.push({...c, instanceId:`inst_${c.id}_${Math.random().toString(36).slice(2)}`});
-          usedIds.add(c.id);
-          added++;
-        }
+      for (const c of pool) {
+        if (newDeck.length >= 52 || added >= maxCards) break;
+        if ((usedCount[c.id] || 0) >= 4) continue;
+        const before = newDeck.length;
+        addCard(c, copies);
+        added += newDeck.length - before;
       }
     };
 
-    const monsters = worldCards.filter(c => c.type === 1).sort((a,b) => scoreCard(b)-scoreCard(a));
-    const items = worldCards.filter(c => c.type === 2).sort((a,b) => scoreCard(b)-scoreCard(a));
-    const counterSp = worldCards.filter(c => (c.type===3||c.type===4) && /\[Counter\]/i.test(c.text||''))
-                        .sort((a,b) => scoreCard(b)-scoreCard(a));
-    const normalSp = worldCards.filter(c => (c.type===3||c.type===4) && !/\[Counter\]/i.test(c.text||''))
-                        .sort((a,b) => scoreCard(b)-scoreCard(a));
-    const genSp = genericCards.filter(c => c.type===3||c.type===4)
-                    .sort((a,b) => scoreCard(b)-scoreCard(a));
+    // 버디가 이미 들어간 경우 카운트
+    if (selectedBuddy) usedCount[selectedBuddy.id] = 4;
 
-    // 버디카드 먼저 추가
-    if (selectedBuddy && selectedBuddy.type === 1) {
-      newDeck.push({...selectedBuddy, instanceId:`inst_${selectedBuddy.id}_buddy`});
-      usedIds.add(selectedBuddy.id);
+    // 테마 핵심 몬스터: size별 분류
+    const themeS3 = themeMonsters.filter(c => (c.size||0) >= 3);
+    const themeS2 = themeMonsters.filter(c => (c.size||0) === 2);
+    const themeS1 = themeMonsters.filter(c => (c.size||0) <= 1 && c.type===1);
+
+    // size3는 2장씩 최대 2종 (총4장), size2는 3장씩 최대 4종 (총12장), size1은 4장씩 최대 3종 (총12장)
+    addPool(themeS3, 6, 2);
+    addPool(themeS2, 16, 3);
+    addPool(themeS1, 12, 4);
+
+    // 보조 몬스터 (테마 아닌 것)
+    addPool(otherMonsters.filter(c=>(c.size||0)>=3), 4, 1);
+    addPool(otherMonsters.filter(c=>(c.size||0)===2), 6, 2);
+
+    // 아이템 1~2종 (2장씩)
+    addPool(items, 4, 2);
+
+    // 카운터 스펠 (3~4장): nullify attack 계열 우선
+    const defSpells = counterSp.filter(c => /nullify.*attack|cannot.*attack/i.test(c.text||''));
+    addPool(defSpells, 4, 4);
+    addPool(counterSp, 6, 2);
+
+    // 일반 스펠 (게이지 차지, 드로우 우선)
+    const gaugeSpells = normalSp.filter(c => /into.*gauge|gauge.*charge/i.test(c.text||''));
+    addPool(gaugeSpells, 8, 4);
+    addPool(normalSp, 8, 2);
+
+    // 나머지 52장 채우기
+    const fillPool = [...themeMonsters, ...otherMonsters, ...normalSp, ...counterSp]
+      .sort((a,b) => scoreCard(b)-scoreCard(a));
+    addPool(fillPool, 52, 4);
+
+    // 최종 52장으로 자름
+    const finalDeck = newDeck.slice(0, 52);
+
+    // 검증: 52장인지 확인 (부족하면 fillPool에서 추가)
+    if (finalDeck.length < 52) {
+      const fallback = allC.filter(c => c.type===1 && c.world===worldId)
+        .sort((a,b) => (b.power||0)-(a.power||0));
+      for (const c of fallback) {
+        if (finalDeck.length >= 52) break;
+        finalDeck.push(mkInst(c, `fill${finalDeck.length}`));
+      }
     }
 
-    // size3 4장, size2 12장, size1 8장
-    addCards(monsters.filter(c=>(c.size||0)===3), 4);
-    addCards(monsters.filter(c=>(c.size||0)===2), 12);
-    addCards(monsters.filter(c=>(c.size||0)===1), 8);
-    addCards(items, 2);
-    addCards(counterSp, 6);
-    addCards(normalSp, 8);
-    addCards(genSp, 4);
+    // {id, count} 형태로 변환 (DeckBuilder 내부 상태 구조)
+    const countMap = {};
+    for (const c of finalDeck) {
+      countMap[c.id] = (countMap[c.id] || 0) + 1;
+    }
+    const deckEntries = Object.entries(countMap).map(([id, count]) => ({
+      id: parseInt(id), count
+    }));
 
-    // 나머지 채우기
-    const pool = [...monsters, ...normalSp, ...counterSp, ...items]
-      .sort((a,b) => scoreCard(b)-scoreCard(a));
-    addCards(pool, 52 - newDeck.length);
-
-    setDeck(newDeck.slice(0, 52));
-    setSaveMsg(T(`✨ 자동 덱 생성 완료! (${newDeck.length}장)`, `✨ Auto deck generated! (${newDeck.length} cards)`));
+    setDeck(deckEntries);
+    setSaveMsg(T(`✨ 자동 덱 생성 완료! (${finalDeck.length}장)`, `✨ Auto deck generated! (${finalDeck.length} cards)`));
     setTimeout(() => setSaveMsg(''), 2500);
   };
   // 카드 데이터 (비동기 로딩 후 사용 가능)
@@ -290,10 +366,13 @@ export default function DeckBuilder() {
           </button>
           <button onClick={handleSave} style={{background:'#00b894',color:'#fff',border:'none',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:12,fontWeight:'bold'}}>💾 {T('저장','Save')}</button>
           <button onClick={() => {
-            const exportData = { name: deckName, flagId: selectedFlag?.id, buddyId: selectedBuddy?.id, cards: deck.map(c => c.id) };
-            const code = btoa(unescape(encodeURIComponent(JSON.stringify(exportData))));
+            // ✅ fix66: 짧은 Export - {id:count} 매핑으로 최소화
+            const cardMap2 = {};
+            deck.forEach(e => { cardMap2[e.id] = e.count; });
+            const data = { f: selectedFlag?.id, b: selectedBuddy?.id, n: deckName, c: cardMap2 };
+            const code = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
             navigator.clipboard?.writeText(code).catch(() => {});
-            setSaveMsg(T('📋 덱 코드 복사됨!','📋 Code copied!'));
+            setSaveMsg(T(`📋 복사됨! (${code.length}자)`,`📋 Copied! (${code.length} chars)`));
             setTimeout(() => setSaveMsg(''), 2500);
           }} style={{background:'rgba(0,184,148,0.2)',color:'#00b894',border:'1px solid rgba(0,184,148,0.4)',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:11}}>
             {T('📤 내보내기','📤 Export')}
@@ -416,5 +495,68 @@ export default function DeckBuilder() {
         </div>
       </div>
     </div>
+
+    {/* ✅ fix66: Import 팝업 */}
+    {showImportPopup && (
+      <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}}>
+        <div style={{background:'#1a2332',border:'1px solid #444',borderRadius:12,padding:24,width:420,maxWidth:'90vw'}}>
+          <div style={{fontSize:14,fontWeight:'bold',color:'#eee',marginBottom:12}}>
+            📥 {T('덱 코드 가져오기','Import Deck Code')}
+          </div>
+          <textarea
+            value={importCode}
+            onChange={e => setImportCode(e.target.value)}
+            placeholder={T('덱 코드를 붙여넣으세요...','Paste deck code here...')}
+            style={{width:'100%',height:120,background:'#2d3748',color:'#eee',border:'1px solid #555',borderRadius:6,padding:8,fontSize:11,resize:'vertical',boxSizing:'border-box'}}
+          />
+          <div style={{display:'flex',gap:8,marginTop:12,justifyContent:'flex-end'}}>
+            <button onClick={() => setShowImportPopup(false)}
+              style={{background:'transparent',color:'#aaa',border:'1px solid #555',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:12}}>
+              {T('취소','Cancel')}
+            </button>
+            <button onClick={() => {
+              try {
+                const json = decodeURIComponent(escape(atob(importCode.trim())));
+                const data = JSON.parse(json);
+                // 구 포맷(cards 배열) + 신 포맷(c 객체 or 배열) 모두 지원
+                const cMap = data.c || data.cards;
+                let entries = [];
+                if (Array.isArray(cMap)) {
+                  // 구 포맷: 배열 → count 집계
+                  const cnt = {};
+                  cMap.forEach(id => { cnt[id] = (cnt[id]||0)+1; });
+                  entries = Object.entries(cnt).map(([id,count]) => ({id:parseInt(id),count}));
+                } else if (typeof cMap === 'object') {
+                  // 신 포맷: {id:count}
+                  entries = Object.entries(cMap).map(([id,count]) => ({id:parseInt(id),count}));
+                }
+                if (!entries.length) throw new Error('빈 덱');
+                setDeck(entries);
+                if (data.f || data.flagId) {
+                  const fid = data.f || data.flagId;
+                  const fc = allCards.find(x => x.id === fid);
+                  if (fc) setSelectedFlag(fc);
+                }
+                if (data.b || data.buddyId) {
+                  const bid = data.b || data.buddyId;
+                  const bc = allCards.find(x => x.id === bid);
+                  if (bc) setSelectedBuddy(bc);
+                }
+                if (data.n || data.name) setDeckName(data.n || data.name);
+                const total = entries.reduce((s,e)=>s+e.count,0);
+                setSaveMsg(T(`✅ 덱 가져오기 성공! (${total}장)`,'✅ Deck imported!'));
+                setShowImportPopup(false);
+              } catch(e) {
+                setSaveMsg(T('❌ 코드가 올바르지 않습니다','❌ Invalid code'));
+              }
+              setTimeout(() => setSaveMsg(''), 3000);
+            }}
+              style={{background:'#0984e3',color:'#fff',border:'none',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:12,fontWeight:'bold'}}>
+              {T('가져오기','Import')}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   );
 }
