@@ -343,6 +343,7 @@ export default function DeckBuilder() {
   const tabStyle = t => ({padding:'6px 14px',border:'none',borderRadius:6,cursor:'pointer',fontSize:12,background:tab===t?'#0984e3':'#2d3748',color:tab===t?'#fff':'#aaa'});
 
   return (
+    <>
     <div style={{minHeight:'100vh',background:'#0d0d1a',color:'#eee',fontFamily:'Arial',display:'flex',flexDirection:'column'}}>
       {/* 헤더 */}
       <div style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderBottom:'1px solid #333',background:'#111',flexWrap:'wrap'}}>
@@ -558,5 +559,6 @@ export default function DeckBuilder() {
         </div>
       </div>
     )}
+    </>
   );
 }
