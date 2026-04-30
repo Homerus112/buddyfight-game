@@ -59,10 +59,60 @@ export function parseEnterEffect(text = '') {
 
   // 덱 서치→손패
   if (/search\s+your\s+deck/i.test(effectText)) effect.searchDeck = true;
+  // "put up to two size 1 <Katana World> monster with different card names from your deck into your hand" 패턴
+  const advSearchM = effectText.match(/put\s+(?:up\s+to\s+)?(one|two|three|\d+)\s+size\s*(\d+)\s+(?:<([^>]+)>|[«"]([^»"]+)[»"])\s+monster(?:s?)\s+with\s+different\s+card\s+names\s+other\s+than\s+["""]([^"""]+)["""]\s+from\s+your\s+deck.*?into\s+your\s+hand/i);
+  if (advSearchM) {
+    const nums = {one:1,two:2,three:3};
+    effect.advSearch = {
+      maxCount: nums[advSearchM[1]?.toLowerCase()] ?? parseInt(advSearchM[1]) ?? 1,
+      size: parseInt(advSearchM[2]),
+      world: (advSearchM[3] || advSearchM[4] || '').trim().toLowerCase(),
+      excludeName: (advSearchM[5] || '').trim().toLowerCase(),
+      differentNames: true,
+    };
+    effect.shuffleDeck = true;
+    // "If you put two, drop a hand card" 조건부 버리기
+    if (/if you put two.*?drop a hand card/i.test(effectText)) effect.advSearchDropIfMax = true;
+  }
   // "put up to one card with X from your deck into your hand" (named deck→hand)
   const deckToHandM = effectText.match(/put\s+(?:up\s+to\s+(?:one|\d+)|the\s+top\s+\w+)\s+cards?\s+(?:with\s+[""«]([^""»]+)[""»]\s+in\s+its\s+card\s+name\s+)?from\s+your\s+deck.*?into\s+your\s+hand/i);
-  if (deckToHandM) { effect.deckToHand = true; effect.deckToHandKw = deckToHandM[1] || null; }
+  if (deckToHandM && !effect.advSearch) { effect.deckToHand = true; effect.deckToHandKw = deckToHandM[1] || null; }
   if (/shuffle\s+your\s+deck/i.test(effectText)) effect.shuffleDeck = true;
+
+  // ✅ fix68: advSearch - 조건부 덱 서치 (Tsukikage Re:B 등)
+  if (effect.advSearch && p.deck.length > 0) {
+    const { maxCount, size, world, excludeName, differentNames } = effect.advSearch;
+    const usedNames = new Set();
+    const picked = [];
+    for (const dc of p.deck) {
+      if (picked.length >= maxCount) break;
+      if (size != null && (dc.size ?? 0) !== size) continue;
+      if (world && !(dc.tribe||'').toLowerCase().includes(world) && !(dc.world_name||'').toLowerCase().includes(world)) {
+        // world 체크: tribe에 world명 포함 or 카드 world 속성으로 매핑
+        // world_name이 없으므로 type/world 번호로 대조
+        const worldMap = {'katana world':1,'danger world':2,'magic world':3,'dungeon world':4,'legend world':5,'dragon world':6,'ancient world':7,'darkness dragon world':9,'hero world':10,'star dragon world':11};
+        const wNum = worldMap[world];
+        if (wNum && dc.world !== wNum && dc.world !== 8) continue;
+        if (!wNum) continue;
+      }
+      if (excludeName && (dc.name||'').toLowerCase().includes(excludeName)) continue;
+      if (differentNames && usedNames.has((dc.name||'').toLowerCase())) continue;
+      if (differentNames) usedNames.add((dc.name||'').toLowerCase());
+      picked.push(dc);
+    }
+    if (picked.length > 0) {
+      const pickedIds = new Set(picked.map(c=>c.instanceId));
+      p = { ...p, hand: [...p.hand, ...picked], deck: p.deck.filter(c=>!pickedIds.has(c.instanceId)) };
+      if (effect.shuffleDeck) p = { ...p, deck: [...p.deck].sort(()=>Math.random()-0.5) };
+      logs.push(`🔍 ${card.name}: 덱 서치 ${picked.length}장 → 손패 (${picked.map(c=>c.name).join(', ')})`);
+      // "If you put two, drop a hand card" - pendingDiscard로 처리 (플레이어 선택)
+      if (effect.advSearchDropIfMax && picked.length >= maxCount && ownerSide === 'player') {
+        // 나중에 GameBoard에서 pendingDiscard UI로 처리
+        return { ...state, [ownerSide]: p, [def]: defP, log: [...state.log, ...logs],
+          _pendingDiscardAfterSearch: { count: 1, context: 'advSearchDrop' } };
+      }
+    }
+  }
 
   // deck→hand (named keyword 지원)
   if (effect.deckToHand && p.deck.length > 0) {

@@ -269,6 +269,20 @@ export function parseSpellEffect(text = '') {
   // ── 드롭에서 호출 ──
   const callDropM = effectText.match(/[Cc]all\s+(?:up\s+to\s+one\s+)?(?:a\s+)?(?:size\s*\d+\s+or\s+less\s+)?(?:monster|card|[«"][^»"]+[»"])\s+from\s+your\s+drop/i);
   if (callDropM) effect.callFromDrop = true;
+  // ✅ fix68: 다중 소환 (call up to two/three monsters)
+  const multiCallM = effectText.match(/[Cc]all\s+(?:up\s+to\s+)?(two|three|2|3)\s+(?:size\s*\d+\s+or\s+less\s+)?(?:monsters?|cards?)/i);
+  if (multiCallM) {
+    const nums = {two:2,three:3,'2':2,'3':3};
+    effect.multiCall = nums[multiCallM[1].toLowerCase()] || 2;
+    // "from your drop zone"
+    if (/from\s+your\s+drop/i.test(effectText)) effect.multiCallFrom = 'drop';
+    else if (/from\s+your\s+(?:deck|hand)/i.test(effectText)) effect.multiCallFrom = 'hand';
+    // size/tribe 조건
+    const szM = effectText.match(/size\s*(\d+)\s+or\s+less/i);
+    if (szM) effect.multiCallMaxSize = parseInt(szM[1]);
+    const tribeM = effectText.match(/[«"]([^»"]+)[»"]/);
+    if (tribeM) effect.multiCallTribe = tribeM[1].trim().toLowerCase();
+  }
 
   // ── 덱 서치 ──
   if (/[Ss]earch\s+your\s+deck/i.test(effectText)) effect.searchDeck = true;

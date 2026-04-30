@@ -431,6 +431,62 @@ function ChargeOverlay({ player, onSelect, onSkip }) {
   );
 }
 
+// ✅ fix68: 손패 선택 버리기 팝업
+function DiscardSelectOverlay({ player, pendingDiscard, onResolve, onCancel, lang }) {
+  const T = (ko, en) => (lang||'ko') === 'ko' ? ko : en;
+  const [selected, setSelected] = React.useState([]);
+  const count = pendingDiscard?.count || 1;
+  const filter = pendingDiscard?.filter; // 'nonMonster' | null
+
+  const available = player.hand.filter(c => {
+    if (filter === 'nonMonster') return c.type !== 1;
+    return true;
+  });
+
+  const toggle = (id) => {
+    setSelected(prev =>
+      prev.includes(id) ? prev.filter(x=>x!==id) : (prev.length < count ? [...prev, id] : [id])
+    );
+  };
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.82)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200}}>
+      <div style={{background:'#1a2332',border:'1px solid #e17055',borderRadius:12,padding:20,maxWidth:500,width:'100%'}}>
+        <div style={{fontSize:14,fontWeight:'bold',color:'#ff6b6b',marginBottom:8}}>
+          🗑️ {T('버릴 카드 선택','Choose card to discard')} ({T(`${count}장 선택`, `Select ${count}`)})
+        </div>
+        {filter === 'nonMonster' && (
+          <div style={{fontSize:11,color:'#fdcb6e',marginBottom:8}}>※ 몬스터가 아닌 카드만 버릴 수 있습니다</div>
+        )}
+        {available.length === 0 ? (
+          <div style={{color:'#aaa',fontSize:12,marginBottom:12}}>버릴 수 있는 카드 없음 → 효과 취소</div>
+        ) : (
+          <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:12}}>
+            {available.map(c=>(
+              <div key={c.instanceId}
+                onClick={()=>toggle(c.instanceId)}
+                style={{cursor:'pointer',border:`2px solid ${selected.includes(c.instanceId)?'#e17055':'#555'}`,borderRadius:6,overflow:'hidden',opacity:selected.includes(c.instanceId)?1:0.7}}>
+                <Card card={c} displayMode="hand"/>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+          <button onClick={onCancel} style={{background:'transparent',color:'#aaa',border:'1px solid #555',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:12}}>
+            {T('취소','Cancel')}
+          </button>
+          <button
+            disabled={selected.length < Math.min(count, available.length) && available.length > 0}
+            onClick={()=>{ if(selected.length>0) onResolve(selected); }}
+            style={{background: selected.length>0?'#e17055':'#555',color:'#fff',border:'none',borderRadius:6,padding:'6px 14px',cursor:selected.length>0?'pointer':'default',fontSize:12,fontWeight:'bold'}}>
+            {T('버리기','Discard')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── 링크어택 대상 ─────────────────────────────────
 function LinkTargetOverlay({ ai, onSelect, onCancel }) {
   return (
@@ -462,8 +518,21 @@ export default function GameBoard() {
     playDoubleAttack, playMoveMonster, goToMenu, playActEffect, playHandActEffect,
     pendingChooseEffect, resolveChooseEffect,
     lang, pendingActChoice, resolveActChoice, clearActChoice, resolveChooseEnter,
-    saveGameState, // ✅ fix64: saveGameState 구조분해 누락 수정
+    saveGameState,
+    pendingDiscard, resolveDiscard, cancelDiscard, // ✅ fix68
   } = useGameStore();
+
+  // ✅ fix68: _pendingDiscardAfterSearch를 pendingDiscard로 변환
+  const { set: storeSet } = useGameStore.getState ? {} : {};
+  useEffect(() => {
+    if (gameState?._pendingDiscardAfterSearch && !pendingDiscard) {
+      const { count, context } = gameState._pendingDiscardAfterSearch;
+      useGameStore.setState({
+        pendingDiscard: { count, context, filter: null },
+        gameState: { ...gameState, _pendingDiscardAfterSearch: undefined },
+      });
+    }
+  }, [gameState?._pendingDiscardAfterSearch]);
 
   const [logOpen, setLogOpen] = useState(true);
   const [bgmState, setBgmState] = useState({playing:false,title:''});
@@ -607,6 +676,16 @@ export default function GameBoard() {
           passCounter(); // counterWindow 닫기
         }}
       />}
+      {/* ✅ fix68: 손패 선택 버리기 팝업 */}
+      {pendingDiscard && (
+        <DiscardSelectOverlay
+          player={player}
+          pendingDiscard={pendingDiscard}
+          onResolve={(ids) => resolveDiscard(ids)}
+          onCancel={cancelDiscard}
+          lang={lang}
+        />
+      )}}
       {showLinkTarget && <LinkTargetOverlay ai={ai} onSelect={z=>{setShowLinkTarget(false);executeLinkAttack(z);}} onCancel={()=>setShowLinkTarget(false)}/>}
       {showMoveUI && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:150}}>

@@ -307,6 +307,24 @@ export function callMonster(state, instanceId, zone) {
     buddyCallPopup: isBuddyCall ? card.name : null,
     log: [...state.log, ...buddyLog, `[${ap==='player'?'나':'AI'}] ${card.name} → ${zone}${costLog}${soulCards.length?` 소울+${soulCards.length}`:''} (Sz합계${newSize})`],
   };
+
+  // ✅ fix68: Ride 효과 처리 - [Ride]로 소환 시 기존 카드 위에 탑승
+  // "[Ride] [소환조건]" - callCost에 Ride 코스트가 있으면 기존 카드를 소울에 추가
+  const isRide = /\[Ride\]/i.test(card.text || '') && oldCard;
+  if (isRide) {
+    // 기존 카드를 드롭 대신 소울에 추가 (Ride는 드롭 아님)
+    const rideCard = { ...cardWithSoul, soul: [...(cardWithSoul.soul||[]), oldCard] };
+    const rideResult = {
+      ...result,
+      [ap]: { ...result[ap], field: { ...result[ap].field, [zone]: rideCard },
+        drop: result[ap].drop.filter(c => c.instanceId !== oldCard.instanceId) },
+      log: [...result.log, `🏇 Ride! ${oldCard.name} → ${card.name}의 소울`],
+      // Ride 상태 추적
+      _ridePairs: { ...(state._ridePairs||{}), [ap]: { rider: card.id, ridden: oldCard.id, zone } },
+    };
+    return applyEnterEffect(rideResult, card, ap);
+  }
+
   const resultWithEnter = applyEnterEffect(result, card, ap);
   // taunt 효과: 상대 공격 시 이 카드로 타겟 변경
   if ((card.text||'').toLowerCase().includes('change the target of the attack to this')) {
@@ -1144,6 +1162,64 @@ export function castSpell(state, instanceId) {
     } catch(err) { logs.push(`⚠️ 효과 처리 오류: ${err.message}`); console.warn('castSpell 효과 오류:', err); }
   }
 
+  // ✅ fix68: 내 필드 카드 "When you cast a spell" 트리거 처리
+  // "When you cast a spell, for this turn, this card gets [KW]" 패턴
+  for (const z of ['left','center','right']) {
+    const fc = updatedP.field[z];
+    if (!fc) continue;
+    const ft = fc.text || '';
+    const spellTrigM = ft.match(/[Ww]hen you (?:cast|use|activate) a spell[,.]?\s*([\s\S]*?)(?=\n\n|\[Act\]|\[Auto\]|\[Cont\]|$)/i);
+    if (!spellTrigM) continue;
+    const trigText = spellTrigM[1];
+    // "for this turn, this card gets [KW]" 패턴
+    const kwM = trigText.match(/(?:for\s+this\s+turn[,.]?\s+)?this\s+card\s+gets?\s+\[([^\]]+)\]/gi);
+    if (kwM) {
+      const newKws = [...(fc._conditionalKws || [])];
+      for (const m of kwM) {
+        const kw = m.match(/\[([^\]]+)\]/)?.[1];
+        if (kw && !newKws.includes(kw)) {
+          newKws.push(kw);
+          logs.push(`⚡ ${fc.name}: 스펠 발동→[${kw}] 획득!`);
+        }
+      }
+      updatedP = { ...updatedP, field: { ...updatedP.field, [z]: { ...fc, _conditionalKws: newKws, _spellKwTurn: true } } };
+    }
+    // "for this turn, this card gets power+N" 패턴
+    const powM = trigText.match(/for\s+this\s+turn.*?(?:this\s+card|it)\s+gets?\s+power\+(\d+)/i);
+    if (powM) {
+      const fc2 = updatedP.field[z];
+      updatedP = { ...updatedP, field: { ...updatedP.field, [z]: { ...fc2, power: (fc2.power||0)+parseInt(powM[1]), _buffed:true } } };
+      logs.push(`⬆️ ${fc.name}: 스펠 발동→파워+${powM[1]}`);
+    }
+    // "for this turn, this card gets critical+N"
+    const critM = trigText.match(/for\s+this\s+turn.*?critical\+(\d+)/i);
+    if (critM) {
+      const fc2 = updatedP.field[z];
+      updatedP = { ...updatedP, field: { ...updatedP.field, [z]: { ...fc2, critical: (fc2.critical||1)+parseInt(critM[1]), _buffed:true } } };
+      logs.push(`⬆️ ${fc.name}: 스펠 발동→크리티컬+${critM[1]}`);
+    }
+    // "for this turn, put the top card of your deck into this card's soul"
+    if (/for\s+this\s+turn.*?(?:put|into).*?soul|put.*?into.*?soul/i.test(trigText) && updatedP.deck.length > 0) {
+      const soulCard = updatedP.deck[0];
+      const fc2 = updatedP.field[z];
+      updatedP = { ...updatedP, deck: updatedP.deck.slice(1), field: { ...updatedP.field, [z]: { ...fc2, soul: [...(fc2.soul||[]), soulCard] } } };
+      logs.push(`💫 ${fc.name}: 스펠 발동→소울 추가(${soulCard.name})`);
+    }
+    // "for this turn, this card gets [Penetrate/DoublAttack/etc]"
+    // (위의 kwM에서 이미 처리됨)
+  }
+  // 아이템도 체크
+  if (updatedP.item) {
+    const fi = updatedP.item;
+    const ft = fi.text || '';
+    const spellTrigM = ft.match(/[Ww]hen you (?:cast|use|activate) a spell[,.]?\s*([\s\S]*?)(?=\n\n|\[Act\]|$)/i);
+    if (spellTrigM) {
+      const trigText = spellTrigM[1];
+      const powM = trigText.match(/for\s+this\s+turn.*?power\+(\d+)/i);
+      if (powM) { updatedP = { ...updatedP, item: { ...fi, power: (fi.power||0)+parseInt(powM[1]), _buffed:true } }; logs.push(`⬆️ ${fi.name}: 스펠 발동→파워+${powM[1]}`); }
+    }
+  }
+
   // 상대 "when opponent casts spell" 트리거
   const oppSide = def;
   const oppField = defP.field;
@@ -1350,16 +1426,82 @@ export function applyCounterSpell(state, instanceId, targetInfo) {
 export function endTurn(state) {
   const next = state.activePlayer === 'player' ? 'ai' : 'player';
   const nextTurn = state.turn + (next === 'player' ? 1 : 0);
+  const ap = state.activePlayer;
   let newState = {
     ...state, activePlayer: next, phase: TURN_PHASE.STAND,
     turn: nextTurn, isFirstTurn: false, attackingCard: null,
     linkAttackQueue: [], pendingDamage: 0,
-    _usedThisTurn: {},   // once per turn 추적 초기화
-    _attackCountThisTurn: 0,  // 공격 횟수 초기화
+    _usedThisTurn: {},
+    _attackCountThisTurn: 0,
     log: [...state.log, `\n--- ${next==='player'?'🎮 내':'🤖 AI'} 턴 (${nextTurn}턴) ---`],
   };
-  // 방금 턴 종료된 플레이어의 Set 효과 - 상대 턴 종료 차지
-  const prevPlayer = state.activePlayer;
+
+  // ✅ fix68: 턴 종료 트리거 (At the end of your turn)
+  const endP = state[ap];
+  for (const z of ['left','center','right']) {
+    const card = endP.field[z];
+    if (!card) continue;
+    const text = card.text || '';
+    const endTrigM = text.match(/[Aa]t\s+the\s+end\s+of\s+(?:your|each)\s+turn[,.]?\s*([\s\S]*?)(?=\n\n|\[Act\]|\[Auto\]|$)/i);
+    if (!endTrigM) continue;
+    const et = endTrigM[1];
+    let condMet = true;
+    const condM = et.match(/^if\s+(.*?)[,.]\s*([\s\S]+)/i);
+    let effectText = et;
+    if (condM) {
+      effectText = condM[2];
+      const cStr = condM[1].toLowerCase();
+      const setNameM = cStr.match(/there is a [«"]([^»"]+)[»"]\s*\[set\]\s+on your field/i);
+      if (setNameM) {
+        const nm = setNameM[1].toLowerCase();
+        const setCards = [].concat(...Object.values(newState[ap].setZone || {})).filter(Boolean);
+        condMet = setCards.some(sc => (sc.name||'').toLowerCase().includes(nm));
+      }
+      const lifeM2 = cStr.match(/you have (\d+) life or less/i);
+      if (lifeM2) condMet = endP.life <= parseInt(lifeM2[1]);
+    }
+    if (!condMet) continue;
+    let pp = { ...newState[ap] };
+    // 소울 추가
+    if (/put\s+the\s+top\s+card.*?(?:into|soul)|into.*?soul/i.test(effectText) && pp.deck.length > 0 && !/gauge/i.test(effectText)) {
+      const sc = pp.deck[0]; const cur = pp.field[z];
+      pp = { ...pp, deck: pp.deck.slice(1), field: { ...pp.field, [z]: { ...cur, soul: [...(cur.soul||[]), sc] } } };
+      newState = { ...newState, log: [...newState.log, `💫 ${card.name}: 턴 종료→소울(${sc.name})`] };
+    }
+    // 파괴
+    if (/destroy\s+a\s+(?:monster|card)\s+on\s+your\s+opponent/i.test(effectText)) {
+      const def = ap === 'player' ? 'ai' : 'player';
+      const defP = newState[def];
+      const tgtZones = ['center','left','right'].filter(tz => defP.field[tz]);
+      if (tgtZones.length > 0) {
+        const tz = tgtZones.sort((a,b)=>(defP.field[a].power||0)-(defP.field[b].power||0))[0];
+        const dest = defP.field[tz];
+        newState = { ...newState, [def]: { ...defP, field: { ...defP.field, [tz]: null }, drop: [...defP.drop, dest] },
+          log: [...newState.log, `💀 ${card.name}: 턴 종료→${dest.name} 파괴`] };
+      }
+    }
+    // 드로우
+    const drawM = effectText.match(/draw\s+(\d+|a)\s+cards?/i);
+    if (drawM && pp.deck.length > 0) {
+      const n = drawM[1]==='a'?1:parseInt(drawM[1]);
+      pp = { ...pp, hand: [...pp.hand, ...pp.deck.slice(0,n)], deck: pp.deck.slice(n) };
+      newState = { ...newState, log: [...newState.log, `🃏 ${card.name}: 턴 종료→드로우 ${n}장`] };
+    }
+    // 차지
+    if (/into\s+(?:your\s+)?gauge/i.test(effectText) && pp.deck.length > 0 && !/soul/i.test(effectText)) {
+      pp = { ...pp, gauge: [...pp.gauge, pp.deck[0]], deck: pp.deck.slice(1) };
+      newState = { ...newState, log: [...newState.log, `⚡ ${card.name}: 턴 종료→차지`] };
+    }
+    // 스탠드
+    if (/\[stand\]\s+this\s+card|stand\s+this\s+card/i.test(effectText)) {
+      const cur = pp.field[z];
+      pp = { ...pp, field: { ...pp.field, [z]: { ...cur, state: 'stand' } } };
+      newState = { ...newState, log: [...newState.log, `🔄 ${card.name}: 턴 종료→스탠드`] };
+    }
+    newState = { ...newState, [ap]: pp };
+  }
+
+  // Set 효과 - 상대 턴 종료 차지
   const oppSide = next;
   const oppSetCard = state.setZone?.[oppSide];
   if (oppSetCard && oppSetCard.text && /at\s+the\s+end\s+of\s+your\s+opponent'?s?\s+turn.*?(?:put|gauge)/i.test(oppSetCard.text)) {

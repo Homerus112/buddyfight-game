@@ -25,6 +25,7 @@ const useGameStore = create((set, get) => ({
   lang: (typeof localStorage !== 'undefined' ? localStorage.getItem('bf_language') : null) || 'ko',
   pendingChooseEffect: null, // { instanceId, options: [{text, effect}] }
   pendingActChoice: null,   // { zone, effects: [{label, idx}] }
+  pendingDiscard: null,     // ✅ fix68: { count, filter, resolve, context } 손패 선택 버리기
   chargeStep: null,
   counterWindow: null,   // { attackerCard, targetZone } AI 공격 시 카운터 타이밍
   linkMode: false,
@@ -280,6 +281,33 @@ const useGameStore = create((set, get) => ({
     set({ gameState: ns, pendingActChoice: null });
   },
   clearActChoice: () => set({ pendingActChoice: null }),
+
+  // ✅ fix68: 손패 선택 버리기 resolve
+  resolveDiscard: (instanceIds) => {
+    const { gameState, pendingDiscard } = get();
+    if (!pendingDiscard || !gameState) return;
+    const ap = gameState.activePlayer;
+    const p = gameState[ap];
+    const toDiscard = p.hand.filter(c => instanceIds.includes(c.instanceId));
+    if (toDiscard.length === 0) return;
+    const newHand = p.hand.filter(c => !instanceIds.includes(c.instanceId));
+    const newDrop = [...p.drop, ...toDiscard];
+    const newState = {
+      ...gameState,
+      [ap]: { ...p, hand: newHand, drop: newDrop },
+      log: [...gameState.log, `🗑️ 손패 ${toDiscard.map(c=>c.name).join(', ')} 버림`],
+    };
+    // context에 따라 다음 처리
+    if (pendingDiscard.context === 'spellEffect') {
+      set({ gameState: newState, pendingDiscard: null });
+    } else if (pendingDiscard.context === 'preventDestroy') {
+      set({ gameState: newState, pendingDiscard: null });
+    } else {
+      set({ gameState: newState, pendingDiscard: null });
+    }
+  },
+  cancelDiscard: () => set({ pendingDiscard: null }),
+
   resolveChooseEnter: (chosenEffect) => {
     const { gameState } = get();
     if (!gameState?._pendingChooseEnter) return;
