@@ -409,11 +409,23 @@ export function declareAttack(state, attackerZone) {
     }
   }
 
+  // ✅ fix69: 첫 턴 아이템 공격 1회 제한
+  if (state.isFirstTurn && attackerZone === 'item') {
+    const usedCount = state._firstTurnItemAttacked || 0;
+    if (usedCount >= 1) {
+      return { ...state, log: [...state.log, `❌ 선공 첫 턴: 아이템 공격은 1회만 가능`] };
+    }
+  }
+
   // ✅ fix66: 공격 선언 시 조건부 키워드 체크 (When this card attacks, if X, gets [KW])
   let newState = {
     ...state,
     attackingCard: { zone: attackerZone, card: attacker },
     log: [...state.log, `⚔️ ${attacker.name} 공격 선언!`],
+    // ✅ fix69: 첫 턴 아이템 공격 카운트
+    _firstTurnItemAttacked: attackerZone === 'item' && state.isFirstTurn
+      ? (state._firstTurnItemAttacked || 0) + 1
+      : state._firstTurnItemAttacked,
   };
   newState = applyAttackConditionalKeywords(newState, attacker, attackerZone, ap);
   return newState;
@@ -506,27 +518,51 @@ export function resolveAttack(state, targetZone) {
         p_def.field = { ...p_def.field, [targetZone]: { ...defender, soul: newSoul } };
         logs.push(`🛡️ [Soulguard] ${defender.name}: 소울 "${discardedSoul?.name || '카드'}" 파괴 → 생존! (남은 소울: ${newSoul.length}장)`);
       } else {
-        // ✅ fix67: 파괴 방지 효과 체크 (Nanomachine Body Replacement 등)
-        // 플레이어 카드가 파괴될 때만 플레이어 선택 필요 → 즉시 자동 처리 (비용 충족 시)
+        // ✅ fix69: 파괴 방지 효과 - 플레이어 카드면 선택 팝업, AI면 자동 처리
         const preventEff = parsePreventDestroyEffect(defender.text || '');
         let prevented = false;
         if (preventEff) {
-          const defOwner = def; // 방어자 소유자
+          const isPlayerCard = def === 'player';
           let defOwnerState = { ...p_def };
-          // 비용 충족 여부 체크
+
           if (preventEff.preventCost === 'discardNonMonster') {
-            const nonMonster = defOwnerState.hand.find(c => c.type !== 1);
-            if (nonMonster) {
-              defOwnerState = { ...defOwnerState, hand: defOwnerState.hand.filter(c => c.instanceId !== nonMonster.instanceId), drop: [...defOwnerState.drop, nonMonster] };
-              prevented = true;
-              logs.push(`🛡️ "${defender.name}" 파괴 방지! (${nonMonster.name} 버림)`);
+            const nonMonsterCards = defOwnerState.hand.filter(c => c.type !== 1);
+            if (nonMonsterCards.length > 0) {
+              if (isPlayerCard) {
+                // 플레이어: pendingDiscard UI로 선택권 부여
+                // 일단 파괴 보류하고 선택 대기
+                logs.push(`🛡️ "${defender.name}" 파괴 방지 가능! 비몬스터 카드를 버려서 막으세요.`);
+                const partialState = {
+                  ...state,
+                  [ap]: p_atk, [def]: p_def,
+                  log: [...state.log, ...logs],
+                  _pendingPreventDestroy: {
+                    zone: targetZone, defSide: def, filter: 'nonMonster'
+                  }
+                };
+                return partialState;
+              } else {
+                // AI: 자동으로 가장 낮은 가치 카드 버리기
+                const toDiscard = nonMonsterCards[0];
+                defOwnerState = { ...defOwnerState, hand: defOwnerState.hand.filter(c=>c.instanceId!==toDiscard.instanceId), drop: [...defOwnerState.drop, toDiscard] };
+                prevented = true;
+                logs.push(`🛡️ "${defender.name}" 파괴 방지! (${toDiscard.name} 버림)`);
+              }
             }
           } else if (preventEff.preventCost === 'discardCard') {
             if (defOwnerState.hand.length > 0) {
-              const toDiscard = defOwnerState.hand[defOwnerState.hand.length - 1];
-              defOwnerState = { ...defOwnerState, hand: defOwnerState.hand.slice(0, -1), drop: [...defOwnerState.drop, toDiscard] };
-              prevented = true;
-              logs.push(`🛡️ "${defender.name}" 파괴 방지! (${toDiscard.name} 버림)`);
+              if (isPlayerCard) {
+                logs.push(`🛡️ "${defender.name}" 파괴 방지 가능! 손패 카드 1장을 버려서 막으세요.`);
+                return {
+                  ...state, [ap]: p_atk, [def]: p_def, log: [...state.log, ...logs],
+                  _pendingPreventDestroy: { zone: targetZone, defSide: def, filter: null }
+                };
+              } else {
+                const toDiscard = defOwnerState.hand[defOwnerState.hand.length - 1];
+                defOwnerState = { ...defOwnerState, hand: defOwnerState.hand.slice(0,-1), drop: [...defOwnerState.drop, toDiscard] };
+                prevented = true;
+                logs.push(`🛡️ "${defender.name}" 파괴 방지! (${toDiscard.name} 버림)`);
+              }
             }
           } else if (preventEff.preventCost === 'gauge') {
             const cost = preventEff.preventGaugeCost || 1;

@@ -263,16 +263,22 @@ function FlagBuddyArea({ p }) {
   const [showFlag, setShowFlag] = useState(false);
   const [showBuddy, setShowBuddy] = useState(false);
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:4,alignItems:'center'}}>
+    <div style={{display:'flex',flexDirection:'row',gap:4,alignItems:'center'}}>
       {showFlag&&p.flag&&<CardModal card={p.flag} onClose={()=>setShowFlag(false)}/>}
       {showBuddy&&p.buddy&&<CardModal card={p.buddy} onClose={()=>setShowBuddy(false)}/>}
-      <div style={{fontSize:9,color:'#aaa'}}>플래그</div>
-      <div onClick={()=>p.flag&&setShowFlag(true)} style={{width:48,height:68,borderRadius:5,border:'1px solid #ffd70055',background:'#1a1a3e',overflow:'hidden',cursor:p.flag?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center'}}>
-        {p.flag?<img src={`/cards/n${p.flag.id}.png`} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>:<span style={{color:'#555',fontSize:9}}>없음</span>}
+      {/* 플래그 */}
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
+        <div style={{fontSize:8,color:'#aaa',letterSpacing:0.5}}>플래그</div>
+        <div onClick={()=>p.flag&&setShowFlag(true)} style={{width:72,height:100,borderRadius:6,border:'1px solid #ffd70055',background:'#1a1a3e',overflow:'hidden',cursor:p.flag?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center'}}>
+          {p.flag?<img src={`/cards/n${p.flag.id}.png`} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>:<span style={{color:'#555',fontSize:9}}>없음</span>}
+        </div>
       </div>
-      <div style={{fontSize:9,color:'#aaa'}}>버디존</div>
-      <div onClick={()=>p.buddy&&setShowBuddy(true)} style={{width:48,height:68,borderRadius:5,border:'1px dashed #ffd70044',background:'rgba(255,215,0,0.04)',overflow:'hidden',cursor:p.buddy?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center'}}>
-        {p.buddy?<img src={`/cards-mini/n${p.buddy.id}.png`} alt="" style={{width:'100%',height:'100%',objectFit:'cover',opacity:0.7}} onError={e=>{e.target.style.display='none';}}/>:<span style={{color:'#555',fontSize:9}}>버디존</span>}
+      {/* 버디존 */}
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
+        <div style={{fontSize:8,color:'#aaa',letterSpacing:0.5}}>버디존</div>
+        <div onClick={()=>p.buddy&&setShowBuddy(true)} style={{width:72,height:100,borderRadius:6,border:'1px dashed #ffd70044',background:'rgba(255,215,0,0.04)',overflow:'hidden',cursor:p.buddy?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center'}}>
+          {p.buddy?<img src={`/cards-mini/n${p.buddy.id}.png`} alt="" style={{width:'100%',height:'100%',objectFit:'cover',opacity:0.7}} onError={e=>{e.target.style.display='none';}}/>:<span style={{color:'#555',fontSize:9}}>버디존</span>}
+        </div>
       </div>
     </div>
   );
@@ -338,45 +344,65 @@ function SideZone({ p, showDeck=false, label='', onDropClick }) {
 }
 
 // ── 카운터 오버레이 (2.5초 타이머) ──────────────────
-function CounterOverlay({ player, info, onUse, onPass, setSpellPopup, onUseFieldAct }) {
-  // 손패: [Counter] 스펠 + [Counter][Act] 몬스터
-  const spells = player.hand.filter(c => {
-    if (c.type===CARD_TYPE.SPELL || c.type===CARD_TYPE.IMPACT) return true;
-    if (c.type===CARD_TYPE.MONSTER) {
-      const t = c.text || '';
-      return t.includes('[Counter]') && t.includes('[Act]')
-          && !/during\s+your\s+turn/i.test(t);
-    }
-    return false;
+function CounterOverlay({ player, info, onUse, onPass, onUseFieldAct, lang }) {
+  const T = (ko, en) => (lang||'ko') === 'ko' ? ko : en;
+  const [clicked, setClicked] = React.useState(null);
+  const hasFieldMonster = ['left','center','right'].some(z => player.field[z]);
+
+  const counterSpells = player.hand.filter(c => {
+    const t = c.text || '';
+    return (c.type===CARD_TYPE.SPELL||c.type===CARD_TYPE.IMPACT) && /\[Counter\]/i.test(t);
   });
-  // ✅ fix67: 필드/아이템의 [Counter][Act] 몬스터
-  const fieldCounterActs = ['left','center','right','item'].map(z => {
+  const counterActHand = player.hand.filter(c => {
+    if (c.type !== CARD_TYPE.MONSTER) return false;
+    const t = c.text || '';
+    return /\[Counter\]/i.test(t) && /\[Act\]/i.test(t) && !/during\s+your\s+turn/i.test(t);
+  });
+  const counterActField = ['left','center','right','item'].map(z => {
     const card = z === 'item' ? player.item : player.field[z];
     if (!card) return null;
     const t = card.text || '';
-    if (t.includes('[Counter]') && t.includes('[Act]') && !/during\s+your\s+turn/i.test(t)) {
-      return { card, zone: z };
-    }
-    return null;
+    if (!/\[Counter\]/i.test(t) || !/\[Act\]/i.test(t)) return null;
+    if (/during\s+your\s+turn/i.test(t)) return null;
+    const needsFieldMonster = /choose\s+a\s+(?:monster|card)\s+on\s+your\s+field/i.test(t);
+    if (needsFieldMonster && !hasFieldMonster) return null;
+    return { card, zone: z };
   }).filter(Boolean);
 
+  const tgtZone = info.targetZone;
+  const handleCardClick = (id) => {
+    if (clicked === id) { onUse(id); setClicked(null); }
+    else setClicked(id);
+  };
+  const handleFieldClick = (zone) => {
+    if (clicked === zone) { onUseFieldAct && onUseFieldAct(zone); setClicked(null); }
+    else setClicked(zone);
+  };
+
   return (
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:150}}>
-      <div style={{background:'#1a1a2e',borderRadius:12,border:'1px solid #e17055',padding:'18px 22px',maxWidth:480,width:'100%'}}>
-        <div style={{marginBottom:6}}>
-          <div style={{fontSize:15,fontWeight:'bold',color:'#ff6b6b'}}>⚠️ 카운터 타이밍</div>
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.78)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:150}}>
+      <div style={{background:'#1a1a2e',borderRadius:12,border:'1px solid #e17055',padding:'18px 22px',maxWidth:500,width:'100%'}}>
+        <div style={{marginBottom:10,padding:'8px 10px',background:'rgba(231,112,80,0.15)',borderRadius:8}}>
+          <div style={{fontSize:13,fontWeight:'bold',color:'#ff6b6b',marginBottom:4}}>⚠️ {T('카운터 타이밍','Counter Timing')}</div>
+          <div style={{fontSize:12,color:'#ddd'}}>{T('공격','Attacker')}: <span style={{color:'#ffd700',fontWeight:'bold'}}>{info.attackerCard?.name}</span></div>
+          <div style={{fontSize:12,color:'#ddd',marginTop:2}}>
+            {T('대상','Target')}: <span style={{color:tgtZone==='player'?'#ff6b6b':'#81ecec',fontWeight:'bold',fontSize:13}}>
+              {tgtZone==='player' ? `🎯 ${T('직접 공격!','Direct Attack!')}` : tgtZone ? `🏟️ ${tgtZone.toUpperCase()} ${T('존','Zone')}` : '—'}
+            </span>
+          </div>
         </div>
-        <div style={{fontSize:12,color:'#aaa',marginBottom:12}}>
-          <span style={{color:'#ffd700'}}>{info.attackerCard?.name}</span> 공격 중
-        </div>
-        {spells.length>0 && (
+        <div style={{fontSize:10,color:'#aaa',marginBottom:8}}>💡 {T('한 번 클릭 → 미리보기 / 두 번 클릭 → 발동','1-click preview / 2-click activate')}</div>
+
+        {counterSpells.length > 0 && (
           <>
-            <div style={{fontSize:10,color:'#81ecec',marginBottom:6}}>🃏 손패 (🔵=[Counter]):</div>
+            <div style={{fontSize:10,color:'#81ecec',marginBottom:6}}>🃏 {T('카운터 스펠','Counter Spells')}:</div>
             <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:10}}>
-              {spells.map(c=>(
+              {counterSpells.map(c=>(
                 <div key={c.instanceId} style={{position:'relative'}}>
-                  {(c.text||'').includes('[Counter]')&&<div style={{position:'absolute',top:2,left:2,background:'#0984e3',color:'#fff',fontSize:7,padding:'1px 3px',borderRadius:2,zIndex:1}}>🔵</div>}
-                  <div onClick={()=>{ setSpellPopup({ id:c.id, name:c.name, effect:c.text||'' }); onUse(c.instanceId); }} style={{cursor:'pointer',border:'2px solid #e17055',borderRadius:6,overflow:'hidden'}}>
+                  <div style={{position:'absolute',top:2,left:2,background:'#0984e3',color:'#fff',fontSize:7,padding:'1px 3px',borderRadius:2,zIndex:1}}>🔵</div>
+                  {clicked===c.instanceId && <div style={{position:'absolute',inset:-2,border:'2px solid #ffd700',borderRadius:8,zIndex:2,pointerEvents:'none'}}/>}
+                  <div onClick={()=>handleCardClick(c.instanceId)} onDoubleClick={()=>onUse(c.instanceId)}
+                    style={{cursor:'pointer',border:`2px solid ${clicked===c.instanceId?'#ffd700':'#e17055'}`,borderRadius:6,overflow:'hidden'}}>
                     <Card card={c} displayMode="hand"/>
                   </div>
                 </div>
@@ -384,14 +410,33 @@ function CounterOverlay({ player, info, onUse, onPass, setSpellPopup, onUseField
             </div>
           </>
         )}
-        {fieldCounterActs.length>0 && (
+        {counterActHand.length > 0 && (
           <>
-            <div style={{fontSize:10,color:'#fdcb6e',marginBottom:6}}>⚡ 필드 [Counter][Act]:</div>
+            <div style={{fontSize:10,color:'#a29bfe',marginBottom:6}}>🤚 {T('[Counter][Act] (손패)','[Counter][Act] (Hand)')}:</div>
             <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:10}}>
-              {fieldCounterActs.map(({card,zone})=>(
+              {counterActHand.map(c=>(
+                <div key={c.instanceId} style={{position:'relative'}}>
+                  <div style={{position:'absolute',top:2,left:2,background:'#6c5ce7',color:'#fff',fontSize:7,padding:'1px 3px',borderRadius:2,zIndex:1}}>ACT</div>
+                  {clicked===c.instanceId && <div style={{position:'absolute',inset:-2,border:'2px solid #ffd700',borderRadius:8,zIndex:2,pointerEvents:'none'}}/>}
+                  <div onClick={()=>handleCardClick(c.instanceId)}
+                    style={{cursor:'pointer',border:`2px solid ${clicked===c.instanceId?'#ffd700':'#a29bfe'}`,borderRadius:6,overflow:'hidden'}}>
+                    <Card card={c} displayMode="hand"/>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        {counterActField.length > 0 && (
+          <>
+            <div style={{fontSize:10,color:'#fdcb6e',marginBottom:6}}>⚡ {T('[Counter][Act] (필드)','[Counter][Act] (Field)')}:</div>
+            <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:10}}>
+              {counterActField.map(({card,zone})=>(
                 <div key={card.instanceId} style={{position:'relative'}}>
                   <div style={{position:'absolute',top:2,left:2,background:'#e17055',color:'#fff',fontSize:7,padding:'1px 3px',borderRadius:2,zIndex:1}}>ACT</div>
-                  <div onClick={()=>onUseFieldAct && onUseFieldAct(zone)} style={{cursor:'pointer',border:'2px solid #fdcb6e',borderRadius:6,overflow:'hidden'}}>
+                  {clicked===zone && <div style={{position:'absolute',inset:-2,border:'2px solid #ffd700',borderRadius:8,zIndex:2,pointerEvents:'none'}}/>}
+                  <div onClick={()=>handleFieldClick(zone)}
+                    style={{cursor:'pointer',border:`2px solid ${clicked===zone?'#ffd700':'#fdcb6e'}`,borderRadius:6,overflow:'hidden'}}>
                     <Card card={card} displayMode="hand"/>
                   </div>
                 </div>
@@ -399,10 +444,12 @@ function CounterOverlay({ player, info, onUse, onPass, setSpellPopup, onUseField
             </div>
           </>
         )}
-        {spells.length===0 && fieldCounterActs.length===0 && (
-          <div style={{fontSize:11,color:'#555',marginBottom:12}}>사용 가능한 카운터 효과 없음</div>
+        {counterSpells.length===0 && counterActHand.length===0 && counterActField.length===0 && (
+          <div style={{fontSize:11,color:'#666',marginBottom:12,textAlign:'center'}}>{T('사용 가능한 카운터 없음','No counter available')}</div>
         )}
-        <button onClick={onPass} style={{width:'100%',background:'#2d3748',color:'#aaa',border:'1px solid #555',borderRadius:8,padding:'9px',fontSize:13,cursor:'pointer'}}>패스 / Pass</button>
+        <button onClick={onPass} style={{width:'100%',background:'#2d3748',color:'#aaa',border:'1px solid #555',borderRadius:8,padding:'9px',fontSize:13,cursor:'pointer',marginTop:4}}>
+          {T('패스','Pass')}
+        </button>
       </div>
     </div>
   );
@@ -522,17 +569,16 @@ export default function GameBoard() {
     pendingDiscard, resolveDiscard, cancelDiscard, // ✅ fix68
   } = useGameStore();
 
-  // ✅ fix68: _pendingDiscardAfterSearch를 pendingDiscard로 변환
-  const { set: storeSet } = useGameStore.getState ? {} : {};
+  // ✅ fix69: _pendingPreventDestroy를 pendingDiscard로 변환
   useEffect(() => {
-    if (gameState?._pendingDiscardAfterSearch && !pendingDiscard) {
-      const { count, context } = gameState._pendingDiscardAfterSearch;
+    if (gameState?._pendingPreventDestroy && !pendingDiscard) {
+      const { filter } = gameState._pendingPreventDestroy;
       useGameStore.setState({
-        pendingDiscard: { count, context, filter: null },
-        gameState: { ...gameState, _pendingDiscardAfterSearch: undefined },
+        pendingDiscard: { count: 1, context: 'preventDestroy', filter },
+        gameState: { ...gameState, _pendingPreventDestroy: undefined },
       });
     }
-  }, [gameState?._pendingDiscardAfterSearch]);
+  }, [gameState?._pendingPreventDestroy]);
 
   const [logOpen, setLogOpen] = useState(true);
   const [bgmState, setBgmState] = useState({playing:false,title:''});
@@ -670,10 +716,10 @@ export default function GameBoard() {
         onUse={playCounterDuringAI}
         onPass={passCounter}
         setSpellPopup={setSpellPopup}
+        lang={lang}
         onUseFieldAct={(zone) => {
-          // ✅ fix67: 필드 [Counter][Act] 몬스터 발동 - playActEffect 호출 후 counterWindow 닫기
           playActEffect(zone);
-          passCounter(); // counterWindow 닫기
+          passCounter();
         }}
       />}
       {/* ✅ fix68: 손패 선택 버리기 팝업 */}
@@ -908,14 +954,14 @@ reMatch ? reMatch() : goToMenu();
 
         {/* 왼쪽: AI 게이지 + 플레이어 게이지 */}
         <div style={{
-          width:60, display:'flex', flexDirection:'column',
+          width:65, display:'flex', flexDirection:'column',
           background:'rgba(0,0,0,0.3)', borderRight:'1px solid rgba(255,255,255,0.05)',
         }}>
           {/* AI 게이지 */}
           <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4,padding:'8px 4px',borderBottom:'1px solid rgba(255,255,255,0.06)'}}>
             <div style={{fontSize:8,color:'#c8a96e',letterSpacing:1,writingMode:'vertical-rl',textOrientation:'mixed',opacity:0.7}}>GAUGE</div>
             <div style={{
-              width:36, flex:1, maxHeight:140,
+              width:40, flex:1, maxHeight:140,
               background:'rgba(255,215,0,0.06)', border:'1px solid rgba(255,215,0,0.2)',
               borderRadius:6, display:'flex', flexDirection:'column-reverse',
               overflow:'hidden', gap:1, padding:2,
@@ -934,7 +980,7 @@ reMatch ? reMatch() : goToMenu();
           <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4,padding:'8px 4px',borderTop:'1px solid rgba(255,255,255,0.06)'}}>
             <div style={{fontSize:11,fontWeight:'bold',color:'#ffd700'}}>{player.gauge.length}</div>
             <div style={{
-              width:36, flex:1, maxHeight:140,
+              width:40, flex:1, maxHeight:140,
               background:'rgba(255,215,0,0.06)', border:'1px solid rgba(255,215,0,0.2)',
               borderRadius:6, display:'flex', flexDirection:'column',
               overflow:'hidden', gap:1, padding:2,
@@ -1010,7 +1056,7 @@ reMatch ? reMatch() : goToMenu();
             <span style={{fontSize:10,color:'rgba(255,255,255,0.2)',letterSpacing:2}}>AI ──────────</span>
             {attackingCard
               ? <span style={{fontSize:11,color:'#ff6b6b',fontWeight:'bold',background:'rgba(255,107,107,0.1)',padding:'3px 12px',borderRadius:20,border:'1px solid rgba(255,107,107,0.3)'}}>⚔ {attackingCard.card?.name?.split(',')[0]}</span>
-              : <span style={{fontSize:10,color:'rgba(255,255,255,0.15)',letterSpacing:3}}>BATTLE FIELD</span>
+              : <span style={{fontSize:10,color:'rgba(255,255,255,0.15)',letterSpacing:3}}>{T('배틀 필드','BATTLE FIELD')}</span>
             }
             <span style={{fontSize:10,color:'rgba(255,255,255,0.2)',letterSpacing:2}}>────────── 나</span>
           </div>
@@ -1056,7 +1102,7 @@ reMatch ? reMatch() : goToMenu();
                     display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
                     cursor:selIsSpell||selCanSet?'pointer':'default',transition:'all 0.2s',
                   }}>
-                  <div style={{fontSize:8,color:selIsSpell||selCanSet?'#ffd700':'rgba(255,255,255,0.2)'}}>✨ SPELL</div>
+                  <div style={{fontSize:8,color:selIsSpell||selCanSet?'#ffd700':'rgba(255,255,255,0.2)'}}>{T('✨ 스펠','✨ SPELL')}</div>
                   {isFinal&&<div style={{fontSize:8,color:'#e17055'}}>IMPACT</div>}
                 </div>
                 <div style={{
@@ -1093,17 +1139,17 @@ reMatch ? reMatch() : goToMenu();
               </div>
             </div>
 
-            {/* 플레이어 상태 표시 */}
-            <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',gap:6}}>
-              {isMyTurn&&!winner&&<span style={{fontSize:10,color:'#74b9ff',opacity:0.7}}>🎮 내 턴</span>}
-              {isFirstTurn&&isMyTurn&&<span style={{fontSize:10,color:'#fdcb6e',background:'rgba(253,203,110,0.1)',padding:'1px 8px',borderRadius:10,border:'1px solid rgba(253,203,110,0.3)'}}>⚠ 첫 턴</span>}
+            {/* 플레이어 상태 표시 - ✅ fix69ui: 1.7배 확대 */}
+            <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',gap:8,paddingLeft:4}}>
+              {isMyTurn&&!winner&&<span style={{fontSize:17,color:'#74b9ff',opacity:0.85,fontWeight:'bold'}}>🎮 {T('내 턴','My Turn')}</span>}
+              {isFirstTurn&&isMyTurn&&<span style={{fontSize:17,color:'#fdcb6e',background:'rgba(253,203,110,0.1)',padding:'2px 14px',borderRadius:12,border:'1px solid rgba(253,203,110,0.3)',fontWeight:'bold'}}>⚠ {T('첫 턴','1st Turn')}</span>}
             </div>
           </div>
 
           {/* ── 손패 영역 ── */}
           <div style={{
             background:'rgba(0,0,0,0.5)', borderTop:'1px solid rgba(255,255,255,0.06)',
-            padding:'4px 10px', flexShrink:0,
+            padding:'3px 10px 3px', flexShrink:0,
           }}>
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4,flexWrap:'wrap'}}>
               <span style={{fontSize:10,color:'rgba(162,155,254,0.8)'}}>🃏 손패 {player.hand.length}장</span>
@@ -1123,7 +1169,7 @@ reMatch ? reMatch() : goToMenu();
           {/* ── 컨트롤 버튼 ── */}
           <div style={{
             background:'rgba(0,0,0,0.6)', borderTop:'1px solid rgba(255,255,255,0.05)',
-            padding:'4px 8px', display:'flex', gap:5, flexWrap:'wrap', justifyContent:'center', flexShrink:0,
+            padding:'6px 8px 8px', display:'flex', gap:5, flexWrap:'wrap', justifyContent:'center', flexShrink:0,
           }}>
             {isMyTurn&&!winner&&!attackingCard&&!chargeStep&&(
               <button onClick={() => { nextPhase(); setTimeout(() => saveGameState?.(), 300); }} disabled={isAIThinking} style={{
@@ -1131,8 +1177,9 @@ reMatch ? reMatch() : goToMenu();
                   ?'linear-gradient(135deg,#e17055,#d63031)'
                   :'linear-gradient(135deg,#0984e3,#0652aa)',
                 color:isAIThinking?'#555':'#fff', border:'none', borderRadius:8,
-                padding:'10px 20px', fontSize:13, fontWeight:'bold', cursor:isAIThinking?'not-allowed':'pointer',
+                padding:'14px 28px', fontSize:15, fontWeight:'bold', cursor:isAIThinking?'not-allowed':'pointer',
                 boxShadow:isAIThinking?'none':'0 2px 8px rgba(9,132,227,0.4)',
+                minWidth:180,
               }}>
                 {phase===TURN_PHASE.END?T('턴 종료 →','End Turn →'):T('다음 페이즈 →','Next Phase →')}
               </button>
@@ -1175,15 +1222,21 @@ reMatch ? reMatch() : goToMenu();
                 </button>
               );
             })}
-            {/* [Act] 버튼 */}
+            {/* [Act] 버튼 - [Counter][Act]는 카운터 타이밍에서만, 일반 [Act]만 표시 */}
             {isMain&&!winner&&['left','center','right','item'].filter(z=>{
               const c=z==='item'?player.item:player.field[z];
-              return c&&(c.text||'').includes('[Act]')&&!(c.text||'').includes('from your hand');
+              if (!c) return false;
+              const t = c.text||'';
+              if (!t.includes('[Act]')) return false;
+              if (t.includes('from your hand')) return false;
+              // ✅ fix69: [Counter][Act]는 일반 Act 버튼에서 제외
+              if (t.includes('[Counter]') && t.includes('[Act]')) return false;
+              return true;
             }).map(z=>{
               const c=z==='item'?player.item:player.field[z];
               return(
                 <button key={z+'_act'} onClick={()=>playActEffect(z)} style={{background:'linear-gradient(135deg,#e84393,#c0392b)',color:'#fff',border:'none',borderRadius:8,padding:'5px 10px',cursor:'pointer',fontSize:11,fontWeight:'bold'}}>
-                  ✨ Act: {c?.name?.split(',')[0]||z}
+                  ✨ {T('액트','Act')}: {c?.name?.split(',')[0]||z}
                 </button>
               );
             })}
@@ -1245,14 +1298,14 @@ reMatch ? reMatch() : goToMenu();
 
         {/* 오른쪽: AI 드롭/덱 + 로그 + 플레이어 드롭/덱 */}
         <div style={{
-          width:96, display:'flex', flexDirection:'column',
+          width:108, display:'flex', flexDirection:'column',
           background:'rgba(0,0,0,0.3)', borderLeft:'1px solid rgba(255,255,255,0.05)',
         }}>
           {/* AI Drop + Deck */}
           <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6, padding:'8px 4px', borderBottom:'1px solid rgba(255,255,255,0.06)'}}>
-            <div style={{fontSize:8,color:'rgba(255,255,255,0.3)',letterSpacing:1}}>AI DROP</div>
+            <div style={{fontSize:8,color:'rgba(255,255,255,0.3)',letterSpacing:1}}>{T('AI 드롭','AI DROP')}</div>
             <div onClick={()=>setDropViewer('ai')} style={{
-              width:60,height:84,borderRadius:5,
+              width:70,height:84,borderRadius:5,
               border:'1px solid rgba(255,255,255,0.12)',
               background:'rgba(255,255,255,0.03)',
               display:'flex',alignItems:'center',justifyContent:'center',
@@ -1265,9 +1318,9 @@ reMatch ? reMatch() : goToMenu();
                 {ai.drop.length>0&&<div style={{position:'absolute',top:1,left:0,right:0,textAlign:'center',fontSize:8,color:'rgba(255,255,255,0.4)'}}>👁</div>}
               </>:<span style={{fontSize:8,color:'rgba(255,255,255,0.15)'}}>0</span>}
             </div>
-            <div style={{fontSize:8,color:'rgba(255,255,255,0.3)',letterSpacing:1}}>AI DECK</div>
+            <div style={{fontSize:8,color:'rgba(255,255,255,0.3)',letterSpacing:1}}>{T('AI 덱','AI DECK')}</div>
             <div style={{
-              width:60,height:84,borderRadius:5,overflow:'hidden',
+              width:70,height:84,borderRadius:5,overflow:'hidden',
               border:'1px solid rgba(108,92,231,0.3)',
               position:'relative',
             }}>
@@ -1303,7 +1356,7 @@ reMatch ? reMatch() : goToMenu();
           {/* Player Drop + Deck */}
           <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6, padding:'8px 4px', borderTop:'1px solid rgba(255,255,255,0.06)'}}>
             <div style={{
-              width:60,height:84,borderRadius:5,overflow:'hidden',
+              width:70,height:84,borderRadius:5,overflow:'hidden',
               border:'1px solid rgba(108,92,231,0.3)', position:'relative',
             }}>
               {player.sleeve!=null
@@ -1311,9 +1364,9 @@ reMatch ? reMatch() : goToMenu();
                 :<div style={{width:'100%',height:'100%',background:'linear-gradient(135deg,#1a1a3e,#2d1b69)',display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{fontSize:14,color:'#9d4edd'}}>★</span></div>}
               <div style={{position:'absolute',bottom:1,left:0,right:0,textAlign:'center',fontSize:10,fontWeight:'bold',color:'#fff',background:'rgba(0,0,0,0.6)',padding:'1px 0'}}>{player.deck.length}</div>
             </div>
-            <div style={{fontSize:8,color:'rgba(255,255,255,0.3)',letterSpacing:1}}>MY DECK</div>
+            <div style={{fontSize:8,color:'rgba(255,255,255,0.3)',letterSpacing:1}}>{T('내 덱','MY DECK')}</div>
             <div onClick={()=>setDropViewer('player')} style={{
-              width:60,height:84,borderRadius:5,
+              width:70,height:84,borderRadius:5,
               border:'1px solid rgba(255,255,255,0.12)',
               background:'rgba(255,255,255,0.03)',
               display:'flex',alignItems:'center',justifyContent:'center',
