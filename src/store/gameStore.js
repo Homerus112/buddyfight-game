@@ -355,7 +355,9 @@ const useGameStore = create((set, get) => ({
       if (!gs || Date.now() - (gs._savedAt||0) > 3600000) {
         localStorage.removeItem('bf_saved_game'); return false;
       }
-      set({ gameState: gs, gameMode: 'game', selectedCard: null,
+      // ✅ fix70: gameMode를 'game'으로 자동 전환하지 않고 gameState만 복원
+      // 메인 메뉴에서 "이어하기" 버튼으로 수동 복원하도록
+      set({ gameState: gs, selectedCard: null,
             chargeStep: null, linkMode: false, setMode: false, isAIThinking: false,
             counterWindow: null, pendingActChoice: null });
       return true;

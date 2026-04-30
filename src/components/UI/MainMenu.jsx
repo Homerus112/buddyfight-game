@@ -166,6 +166,25 @@ export default function MainMenu() {
           cursor: 'pointer', boxShadow: '0 4px 20px rgba(225,112,85,0.4)',
         }}>{t('⚔️ 게임 시작','⚔️ Start Game')}</button>
 
+        {/* ✅ fix70: 저장된 게임 이어하기 버튼 */}
+        {(() => {
+          try {
+            const raw = localStorage.getItem('bf_saved_game');
+            const saved = raw ? JSON.parse(raw) : null;
+            const valid = saved && Date.now() - (saved._savedAt||0) < 3600000;
+            if (!valid) return null;
+            const { set: storeSet } = useGameStore.getState();
+            return (
+              <button onClick={() => useGameStore.setState({ gameMode: 'game' })} style={{
+                background: 'linear-gradient(135deg, #00b894, #00cec9)',
+                color: '#fff', border: 'none', borderRadius: 10,
+                padding: '14px', fontSize: 16, fontWeight: 'bold',
+                cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,184,148,0.3)',
+              }}>▶️ {t('이어하기','Continue')}</button>
+            );
+          } catch { return null; }
+        })()}
+
         <button onClick={goToDeckBuilder} style={{
           background: 'linear-gradient(135deg, #0984e3, #6c5ce7)',
           color: '#fff', border: 'none', borderRadius: 10,

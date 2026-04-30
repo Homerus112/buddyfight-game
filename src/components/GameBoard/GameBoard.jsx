@@ -4,7 +4,7 @@ import { t as i18nT } from '../../i18n/useI18n.js';
 import useGameStore from '../../store/gameStore.js';
 import Card from '../Card/Card.jsx';
 import CardModal from '../UI/CardModal.jsx';
-import { TURN_PHASE, TURN_PHASE_NAME, CARD_TYPE, CARD_STATE } from '../../utils/constants.js';
+import { TURN_PHASE, TURN_PHASE_NAME, TURN_PHASE_NAME_EN, CARD_TYPE, CARD_STATE } from '../../utils/constants.js';
 
 // ── 버디 콜 팝업 ──────────────────────────────────
 function BuddyCallPopup({ name }) {
@@ -347,6 +347,7 @@ function SideZone({ p, showDeck=false, label='', onDropClick }) {
 function CounterOverlay({ player, info, onUse, onPass, onUseFieldAct, lang }) {
   const T = (ko, en) => (lang||'ko') === 'ko' ? ko : en;
   const [clicked, setClicked] = React.useState(null);
+  const [previewCard, setPreviewCard] = React.useState(null);
   const hasFieldMonster = ['left','center','right'].some(z => player.field[z]);
 
   const counterSpells = player.hand.filter(c => {
@@ -391,7 +392,7 @@ function CounterOverlay({ player, info, onUse, onPass, onUseFieldAct, lang }) {
             </span>
           </div>
         </div>
-        <div style={{fontSize:10,color:'#aaa',marginBottom:8}}>💡 {T('한 번 클릭 → 미리보기 / 두 번 클릭 → 발동','1-click preview / 2-click activate')}</div>
+        <div style={{fontSize:10,color:'#aaa',marginBottom:8}}>💡 {T('우클릭: 카드 설명 / 두 번 클릭: 발동','Right-click: info / Double-click: activate')}</div>
 
         {counterSpells.length > 0 && (
           <>
@@ -419,6 +420,7 @@ function CounterOverlay({ player, info, onUse, onPass, onUseFieldAct, lang }) {
                   <div style={{position:'absolute',top:2,left:2,background:'#6c5ce7',color:'#fff',fontSize:7,padding:'1px 3px',borderRadius:2,zIndex:1}}>ACT</div>
                   {clicked===c.instanceId && <div style={{position:'absolute',inset:-2,border:'2px solid #ffd700',borderRadius:8,zIndex:2,pointerEvents:'none'}}/>}
                   <div onClick={()=>handleCardClick(c.instanceId)}
+                    onContextMenu={(e)=>{ e.preventDefault(); setPreviewCard(c); }}
                     style={{cursor:'pointer',border:`2px solid ${clicked===c.instanceId?'#ffd700':'#a29bfe'}`,borderRadius:6,overflow:'hidden'}}>
                     <Card card={c} displayMode="hand"/>
                   </div>
@@ -451,6 +453,23 @@ function CounterOverlay({ player, info, onUse, onPass, onUseFieldAct, lang }) {
           {T('패스','Pass')}
         </button>
       </div>
+      {/* 우클릭 카드 상세 미리보기 */}
+      {previewCard && (
+        <div onClick={()=>setPreviewCard(null)} style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',zIndex:10}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'#1a1a2e',borderRadius:12,border:'1px solid rgba(255,255,255,0.2)',padding:16,maxWidth:320,width:'90%'}}>
+            <div style={{display:'flex',gap:12,alignItems:'flex-start',marginBottom:10}}>
+              <img src={`/cards/n${previewCard.id}.png`} alt="" style={{width:80,height:112,borderRadius:6,objectFit:'cover',flexShrink:0}} onError={e=>{e.target.style.display='none';}}/>
+              <div>
+                <div style={{fontSize:12,fontWeight:'bold',color:'#fff',marginBottom:4}}>{previewCard.name}</div>
+                <div style={{fontSize:10,color:'#aaa',lineHeight:1.6}}>{(lang||'ko')==='ko'&&previewCard.text_ko ? previewCard.text_ko : previewCard.text}</div>
+              </div>
+            </div>
+            <button onClick={()=>setPreviewCard(null)} style={{width:'100%',background:'rgba(255,255,255,0.07)',color:'#aaa',border:'1px solid rgba(255,255,255,0.1)',borderRadius:6,padding:'6px',cursor:'pointer',fontSize:11}}>
+              {T('닫기','Close')}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -937,10 +956,12 @@ reMatch ? reMatch() : goToMenu();
           <button onClick={bgmToggle} title={bgmState.title||'BGM'} style={{background:bgmState.playing?'rgba(255,215,0,0.1)':'rgba(255,255,255,0.05)',color:bgmState.playing?'#ffd700':'#555',border:`1px solid ${bgmState.playing?'rgba(255,215,0,0.3)':'rgba(255,255,255,0.08)'}`,borderRadius:6,padding:'3px 8px',cursor:'pointer',fontSize:13}}>{bgmState.playing?'🎵':'🔇'}</button>
           <button onClick={bgmNext} title="다음 곡" style={{background:'rgba(255,255,255,0.05)',color:'#888',border:'1px solid rgba(255,255,255,0.08)',borderRadius:6,padding:'3px 8px',cursor:'pointer',fontSize:13}}>⏭</button>
           <span style={{color:'#c8a96e',fontWeight:'bold',fontSize:13}}>Turn {turn}</span>
-          <span style={{background:'rgba(255,255,255,0.08)',padding:'2px 10px',borderRadius:20,fontSize:11,color:'#81b4cf',border:'1px solid rgba(129,180,207,0.3)'}}>{TURN_PHASE_NAME[phase]}</span>
-          {isAIThinking&&<span style={{color:'#fd79a8',fontSize:11,animation:'pulse 1s infinite'}}>● AI 진행 중...</span>}
-          {isFirstTurn&&isMyTurn&&<span style={{color:'#fdcb6e',fontSize:11}}>⚠ 선공 첫 턴</span>}
-          {linkMode&&<span style={{color:'#a29bfe',fontSize:11,fontWeight:'bold'}}>🔗 링크어택 {linkQueue.length}장</span>}
+          <span style={{background:'rgba(255,255,255,0.08)',padding:'2px 10px',borderRadius:20,fontSize:11,color:'#81b4cf',border:'1px solid rgba(129,180,207,0.3)'}}>
+            {(lang==='ko' ? TURN_PHASE_NAME : TURN_PHASE_NAME_EN)[phase]}
+          </span>
+          {isAIThinking&&<span style={{color:'#fd79a8',fontSize:11,animation:'pulse 1s infinite'}}>● {T('AI 진행 중...','AI Thinking...')}</span>}
+          {isFirstTurn&&isMyTurn&&<span style={{color:'#fdcb6e',fontSize:11}}>⚠ {T('선공 첫 턴','1st Turn')}</span>}
+          {linkMode&&<span style={{color:'#a29bfe',fontSize:11,fontWeight:'bold'}}>🔗 {T('링크어택','Link Atk')} {linkQueue.length}{T('장','')}</span>}
         </div>
         <div style={{display:'flex',gap:16,alignItems:'center'}}>
           <Stats p={ai} label="AI" isActive={!isMyTurn}/>
@@ -1139,17 +1160,17 @@ reMatch ? reMatch() : goToMenu();
               </div>
             </div>
 
-            {/* 플레이어 상태 표시 - ✅ fix69ui: 1.7배 확대 */}
-            <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',gap:8,paddingLeft:4}}>
-              {isMyTurn&&!winner&&<span style={{fontSize:17,color:'#74b9ff',opacity:0.85,fontWeight:'bold'}}>🎮 {T('내 턴','My Turn')}</span>}
-              {isFirstTurn&&isMyTurn&&<span style={{fontSize:17,color:'#fdcb6e',background:'rgba(253,203,110,0.1)',padding:'2px 14px',borderRadius:12,border:'1px solid rgba(253,203,110,0.3)',fontWeight:'bold'}}>⚠ {T('첫 턴','1st Turn')}</span>}
+            {/* 플레이어 상태 표시 - ✅ fix70: 원래 크기 */}
+            <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',gap:6}}>
+              {isMyTurn&&!winner&&<span style={{fontSize:10,color:'#74b9ff',opacity:0.7}}>🎮 {T('내 턴','My Turn')}</span>}
+              {isFirstTurn&&isMyTurn&&<span style={{fontSize:10,color:'#fdcb6e',background:'rgba(253,203,110,0.1)',padding:'1px 8px',borderRadius:10,border:'1px solid rgba(253,203,110,0.3)'}}>⚠ {T('첫 턴','1st Turn')}</span>}
             </div>
           </div>
 
           {/* ── 손패 영역 ── */}
           <div style={{
             background:'rgba(0,0,0,0.5)', borderTop:'1px solid rgba(255,255,255,0.06)',
-            padding:'3px 10px 3px', flexShrink:0,
+            padding:'5px 10px', flexShrink:0,
           }}>
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4,flexWrap:'wrap'}}>
               <span style={{fontSize:10,color:'rgba(162,155,254,0.8)'}}>🃏 손패 {player.hand.length}장</span>
@@ -1169,7 +1190,7 @@ reMatch ? reMatch() : goToMenu();
           {/* ── 컨트롤 버튼 ── */}
           <div style={{
             background:'rgba(0,0,0,0.6)', borderTop:'1px solid rgba(255,255,255,0.05)',
-            padding:'6px 8px 8px', display:'flex', gap:5, flexWrap:'wrap', justifyContent:'center', flexShrink:0,
+            padding:'3px 8px 2px', display:'flex', gap:5, flexWrap:'wrap', justifyContent:'center', flexShrink:0,
           }}>
             {isMyTurn&&!winner&&!attackingCard&&!chargeStep&&(
               <button onClick={() => { nextPhase(); setTimeout(() => saveGameState?.(), 300); }} disabled={isAIThinking} style={{
@@ -1177,9 +1198,8 @@ reMatch ? reMatch() : goToMenu();
                   ?'linear-gradient(135deg,#e17055,#d63031)'
                   :'linear-gradient(135deg,#0984e3,#0652aa)',
                 color:isAIThinking?'#555':'#fff', border:'none', borderRadius:8,
-                padding:'14px 28px', fontSize:15, fontWeight:'bold', cursor:isAIThinking?'not-allowed':'pointer',
+                padding:'12px 28px', fontSize:14, fontWeight:'bold', cursor:isAIThinking?'not-allowed':'pointer',
                 boxShadow:isAIThinking?'none':'0 2px 8px rgba(9,132,227,0.4)',
-                minWidth:180,
               }}>
                 {phase===TURN_PHASE.END?T('턴 종료 →','End Turn →'):T('다음 페이즈 →','Next Phase →')}
               </button>

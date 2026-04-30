@@ -107,7 +107,7 @@ export function doStandPhase(state) {
     firstTurnAttackCount: 0,    // 선공 첫 턴 공격 횟수
     firstTurnMonsterCount: 0,   // 선공 첫 턴 소환 횟수
     // setZone은 세트 카드가 제거될 때까지 유지 (리셋 안 함)
-    log: [...state.log, L(`[${ap==='player'?'나':'AI'}] ① 스탠드`,`[${ap==='player'?'Me':'AI'}] ① Stand`)],
+    log: [...state.log, L(L(`[${ap==='player'?'나':'AI'}] ① 스탠드`,`[${ap==='player'?'Me':'AI'}] ① Stand`),`[${ap==='player'?'Me':'AI'}] ① Stand`)],
   };
   // ── [Cont] 지속 효과 적용 ─────────────────────────────
   // 필드의 모든 카드를 순회하며 Cont 효과(필드 버프)를 적용
@@ -187,8 +187,8 @@ export function doChargeAndDraw(state) {
   let deck = [...p.deck], gauge = [...p.gauge], hand = [...p.hand], drop = [...p.drop];
   let field = { ...p.field };
   const logs = [];
-  if (deck.length > 0) { gauge.push(deck.shift()); logs.push(`[${ap==='player'?'나':'AI'}] 차지 ⚡${gauge.length}`); }
-  if (deck.length > 0) { hand.push(deck.shift()); logs.push(`드로우 🃏${hand.length}`); }
+  if (deck.length > 0) { gauge.push(deck.shift()); logs.push(L(`[${ap==='player'?'나':'AI'}] 차지 ⚡${gauge.length}`,`[${ap==='player'?'Me':'AI'}] Charge ⚡${gauge.length}`)); }
+  if (deck.length > 0) { hand.push(deck.shift()); logs.push(L(`드로우 🃏${hand.length}`,`Draw 🃏${hand.length}`)); }
   return { ...state, [ap]: { ...p, deck, gauge, hand, drop, field }, log: [...state.log, ...logs] };
 }
 
@@ -470,7 +470,7 @@ export function resolveAttack(state, targetZone) {
   const mainAttacker = attackers[0].card; // 크리티컬/키워드 기준
   const isLinkAttack = attackers.length > 1;
 
-  if (isLinkAttack) logs.push(`🔗 링크어택! 합산파워 ${totalPower.toLocaleString()} (${attackers.length}장)`);
+  if (isLinkAttack) logs.push(L(`🔗 링크어택! 합산파워 ${totalPower.toLocaleString()} (${attackers.length}장)`,`🔗 Link Attack! Power ${totalPower.toLocaleString()} (${attackers.length}))`) );
 
   // taunt 체크: 상대 필드에 공격 대상 강제 변경 카드가 있으면 타겟 전환
   let effectiveTarget = targetZone;
@@ -648,7 +648,7 @@ export function resolveAttack(state, targetZone) {
         }
       }
     } else {
-      logs.push(`🛡️ ${defender.name} 방어!`);
+      logs.push(L(`🛡️ ${defender.name} 방어!`,`🛡️ ${defender.name} Defended!`));
       // [Counterattack]: 공격 몬스터의 defense <= 방어 몬스터의 power 일 때 파괴
       if (hasKW(defender, 'Counterattack') && attackers[0].zone !== 'item') {
         const aZone = attackers[0].zone;
