@@ -338,46 +338,69 @@ function SideZone({ p, showDeck=false, label='', onDropClick }) {
 }
 
 // ── 카운터 오버레이 (2.5초 타이머) ──────────────────
-function CounterOverlay({ player, info, onUse, onPass, setSpellPopup }) {
+function CounterOverlay({ player, info, onUse, onPass, setSpellPopup, onUseFieldAct }) {
+  // 손패: [Counter] 스펠 + [Counter][Act] 몬스터
   const spells = player.hand.filter(c => {
     if (c.type===CARD_TYPE.SPELL || c.type===CARD_TYPE.IMPACT) return true;
     if (c.type===CARD_TYPE.MONSTER) {
       const t = c.text || '';
-      // [Counter][Act] 손패 몬스터: "During your turn" 제외, "from your hand" 포함 확인
       return t.includes('[Counter]') && t.includes('[Act]')
-          && !/during\s+your\s+turn/i.test(t)
-          && /from\s+your\s+hand|discard\s+this\s+card/i.test(t);
+          && !/during\s+your\s+turn/i.test(t);
     }
     return false;
   });
+  // ✅ fix67: 필드/아이템의 [Counter][Act] 몬스터
+  const fieldCounterActs = ['left','center','right','item'].map(z => {
+    const card = z === 'item' ? player.item : player.field[z];
+    if (!card) return null;
+    const t = card.text || '';
+    if (t.includes('[Counter]') && t.includes('[Act]') && !/during\s+your\s+turn/i.test(t)) {
+      return { card, zone: z };
+    }
+    return null;
+  }).filter(Boolean);
+
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:150}}>
-      <div style={{background:'#1a1a2e',borderRadius:12,border:'1px solid #e17055',padding:'18px 22px',maxWidth:440,width:'100%'}}>
+      <div style={{background:'#1a1a2e',borderRadius:12,border:'1px solid #e17055',padding:'18px 22px',maxWidth:480,width:'100%'}}>
         <div style={{marginBottom:6}}>
           <div style={{fontSize:15,fontWeight:'bold',color:'#ff6b6b'}}>⚠️ 카운터 타이밍</div>
         </div>
         <div style={{fontSize:12,color:'#aaa',marginBottom:12}}>
           <span style={{color:'#ffd700'}}>{info.attackerCard?.name}</span> 공격 중
         </div>
-        {spells.length>0 ? (
+        {spells.length>0 && (
           <>
-            <div style={{fontSize:10,color:'#81ecec',marginBottom:6}}>사용 가능한 스펠 (🔵=[Counter]):</div>
-            <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:12}}>
+            <div style={{fontSize:10,color:'#81ecec',marginBottom:6}}>🃏 손패 (🔵=[Counter]):</div>
+            <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:10}}>
               {spells.map(c=>(
                 <div key={c.instanceId} style={{position:'relative'}}>
                   {(c.text||'').includes('[Counter]')&&<div style={{position:'absolute',top:2,left:2,background:'#0984e3',color:'#fff',fontSize:7,padding:'1px 3px',borderRadius:2,zIndex:1}}>🔵</div>}
-                  <div onClick={()=>{
-                    setSpellPopup({ id:c.id, name:c.name, effect:c.text||'' });
-                    onUse(c.instanceId);
-                  }} style={{cursor:'pointer',border:'2px solid #e17055',borderRadius:6,overflow:'hidden'}}>
+                  <div onClick={()=>{ setSpellPopup({ id:c.id, name:c.name, effect:c.text||'' }); onUse(c.instanceId); }} style={{cursor:'pointer',border:'2px solid #e17055',borderRadius:6,overflow:'hidden'}}>
                     <Card card={c} displayMode="hand"/>
                   </div>
                 </div>
               ))}
             </div>
           </>
-        ) : (
-          <div style={{fontSize:11,color:'#555',marginBottom:12}}>사용 가능한 스펠 없음</div>
+        )}
+        {fieldCounterActs.length>0 && (
+          <>
+            <div style={{fontSize:10,color:'#fdcb6e',marginBottom:6}}>⚡ 필드 [Counter][Act]:</div>
+            <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:10}}>
+              {fieldCounterActs.map(({card,zone})=>(
+                <div key={card.instanceId} style={{position:'relative'}}>
+                  <div style={{position:'absolute',top:2,left:2,background:'#e17055',color:'#fff',fontSize:7,padding:'1px 3px',borderRadius:2,zIndex:1}}>ACT</div>
+                  <div onClick={()=>onUseFieldAct && onUseFieldAct(zone)} style={{cursor:'pointer',border:'2px solid #fdcb6e',borderRadius:6,overflow:'hidden'}}>
+                    <Card card={card} displayMode="hand"/>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        {spells.length===0 && fieldCounterActs.length===0 && (
+          <div style={{fontSize:11,color:'#555',marginBottom:12}}>사용 가능한 카운터 효과 없음</div>
         )}
         <button onClick={onPass} style={{width:'100%',background:'#2d3748',color:'#aaa',border:'1px solid #555',borderRadius:8,padding:'9px',fontSize:13,cursor:'pointer'}}>패스 / Pass</button>
       </div>
@@ -572,7 +595,18 @@ export default function GameBoard() {
       <DropViewer cards={dropViewer==='player'?player.drop:dropViewer==='ai'?ai.drop:null}
         title={dropViewer==='player'?T('나','Me'):T('AI','AI')} onClose={()=>setDropViewer(null)}
         onCardClick={(c)=>setCardDetailPopup(c)}/>
-      {counterWindow && <CounterOverlay player={player} info={counterWindow} onUse={playCounterDuringAI} onPass={passCounter} setSpellPopup={setSpellPopup}/>}
+      {counterWindow && <CounterOverlay
+        player={player}
+        info={counterWindow}
+        onUse={playCounterDuringAI}
+        onPass={passCounter}
+        setSpellPopup={setSpellPopup}
+        onUseFieldAct={(zone) => {
+          // ✅ fix67: 필드 [Counter][Act] 몬스터 발동 - playActEffect 호출 후 counterWindow 닫기
+          playActEffect(zone);
+          passCounter(); // counterWindow 닫기
+        }}
+      />}
       {showLinkTarget && <LinkTargetOverlay ai={ai} onSelect={z=>{setShowLinkTarget(false);executeLinkAttack(z);}} onCancel={()=>setShowLinkTarget(false)}/>}
       {showMoveUI && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:150}}>

@@ -189,6 +189,8 @@ export default function DeckBuilder() {
   const allCards = getCardsCache() || [];
   const cardMap = Object.fromEntries(allCards.map(c => [c.id, c]));
   const flagCards = allCards.filter(c => c.type === CARD_TYPE.FLAG);
+  // ✅ fix67: prebuiltDecks 선언 추가
+  const prebuiltDecks = getDecksCache() || {};
   const [search, setSearch] = useState('');
   const [filterWorld, setFilterWorld] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -326,9 +328,17 @@ export default function DeckBuilder() {
     const aiDeckName = aiPool[Math.floor(Math.random() * aiPool.length)];
     const aiData = prebuiltDecks[aiDeckName];
     const aiDeckCards = [];
-    for(const entry of aiData.cards){
-      const c=cardMap[entry.id];
-      if(c && c.type!==5) for(let i=0;i<Math.min(entry.count,4);i++) aiDeckCards.push(c);
+    // ✅ fix67: prebuilt_decks.json은 cardIds 배열 형식
+    if (aiData.cardIds) {
+      for (const id of aiData.cardIds) {
+        const c = cardMap[id];
+        if (c && c.type !== 5) aiDeckCards.push({...c, instanceId:`ai_${c.id}_${Math.random().toString(36).slice(2,6)}`});
+      }
+    } else if (aiData.cards) {
+      for (const entry of aiData.cards) {
+        const c = cardMap[entry.id];
+        if (c && c.type !== 5) for (let i = 0; i < Math.min(entry.count||1, 4); i++) aiDeckCards.push({...c, instanceId:`ai_${c.id}_${i}`});
+      }
     }
     const aiFlag = cardMap[aiData.flagId];
     const aiBuddy = aiData.buddyId ? cardMap[aiData.buddyId] : null;

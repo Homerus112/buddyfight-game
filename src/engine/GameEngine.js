@@ -1,6 +1,6 @@
 import { parseCost, canPayCost, payCost, canCastSpell, parseSpellEffect, isCounterSpell } from './CostSystem.js';
 import { L } from '../i18n/useI18n.js';
-import { applyEnterEffect, parsePhaseTrigger, applyActEffect } from './MonsterEffects.js';
+import { applyEnterEffect, parsePhaseTrigger, applyActEffect, parsePreventDestroyEffect } from './MonsterEffects.js';
 import { GAME_CONFIG, TURN_PHASE, CARD_TYPE, CARD_STATE } from '../utils/constants.js';
 
 export function shuffleDeck(deck) {
@@ -488,6 +488,58 @@ export function resolveAttack(state, targetZone) {
         p_def.field = { ...p_def.field, [targetZone]: { ...defender, soul: newSoul } };
         logs.push(`🛡️ [Soulguard] ${defender.name}: 소울 "${discardedSoul?.name || '카드'}" 파괴 → 생존! (남은 소울: ${newSoul.length}장)`);
       } else {
+        // ✅ fix67: 파괴 방지 효과 체크 (Nanomachine Body Replacement 등)
+        // 플레이어 카드가 파괴될 때만 플레이어 선택 필요 → 즉시 자동 처리 (비용 충족 시)
+        const preventEff = parsePreventDestroyEffect(defender.text || '');
+        let prevented = false;
+        if (preventEff) {
+          const defOwner = def; // 방어자 소유자
+          let defOwnerState = { ...p_def };
+          // 비용 충족 여부 체크
+          if (preventEff.preventCost === 'discardNonMonster') {
+            const nonMonster = defOwnerState.hand.find(c => c.type !== 1);
+            if (nonMonster) {
+              defOwnerState = { ...defOwnerState, hand: defOwnerState.hand.filter(c => c.instanceId !== nonMonster.instanceId), drop: [...defOwnerState.drop, nonMonster] };
+              prevented = true;
+              logs.push(`🛡️ "${defender.name}" 파괴 방지! (${nonMonster.name} 버림)`);
+            }
+          } else if (preventEff.preventCost === 'discardCard') {
+            if (defOwnerState.hand.length > 0) {
+              const toDiscard = defOwnerState.hand[defOwnerState.hand.length - 1];
+              defOwnerState = { ...defOwnerState, hand: defOwnerState.hand.slice(0, -1), drop: [...defOwnerState.drop, toDiscard] };
+              prevented = true;
+              logs.push(`🛡️ "${defender.name}" 파괴 방지! (${toDiscard.name} 버림)`);
+            }
+          } else if (preventEff.preventCost === 'gauge') {
+            const cost = preventEff.preventGaugeCost || 1;
+            if (defOwnerState.gauge.length >= cost) {
+              defOwnerState = { ...defOwnerState, gauge: defOwnerState.gauge.slice(cost), drop: [...defOwnerState.drop, ...defOwnerState.gauge.slice(0, cost)] };
+              prevented = true;
+              logs.push(`🛡️ "${defender.name}" 파괴 방지! (게이지 ${cost} 지불)`);
+            }
+          } else if (preventEff.preventCost === 'dropSoul') {
+            const card = defOwnerState.field[targetZone];
+            if (card?.soul?.length > 0) {
+              const soul = card.soul.at(-1);
+              defOwnerState = { ...defOwnerState, field: { ...defOwnerState.field, [targetZone]: { ...card, soul: card.soul.slice(0,-1) } }, drop: [...defOwnerState.drop, soul] };
+              prevented = true;
+              logs.push(`🛡️ "${defender.name}" 파괴 방지! (소울 드롭)`);
+            }
+          } else if (preventEff.preventCost === 'life') {
+            const cost = preventEff.preventLifeCost || 1;
+            if (defOwnerState.life > cost) {
+              defOwnerState = { ...defOwnerState, life: defOwnerState.life - cost };
+              prevented = true;
+              logs.push(`🛡️ "${defender.name}" 파괴 방지! (라이프 ${cost} 지불)`);
+            }
+          }
+          if (prevented) {
+            if (def === 'player') p_def = defOwnerState;
+            else p_atk = defOwnerState; // AI가 방어자인 경우는 드물지만 처리
+          }
+        }
+
+        if (!prevented) {
         p_def.field = { ...p_def.field, [targetZone]: null };
         p_def.drop = [...p_def.drop, defender];
         // [Set] 파괴 불가 체크
@@ -508,6 +560,7 @@ export function resolveAttack(state, targetZone) {
       }
         // 파괴 시 트리거 (임시 저장, 아래에서 적용)
         newState._pendingDestroyTrigger = { card: defender, side: def };
+        } // end if (!prevented)
         // Lifelink: 파괴된 몬스터 소유자 라이프 감소
         const lifelinkM = (defender.text || '').match(/\[Lifelink (\d+)\]/i);
         if (lifelinkM) {
@@ -1868,7 +1921,7 @@ export function advancePhase(state) {
   }
   // 페이즈 진입 시 phase_trigger 처리 (main/attack/final)
   if (next === TURN_PHASE.MAIN || next === TURN_PHASE.ATTACK || next === TURN_PHASE.FINAL) {
-    const phaseName = next; // 'main'/'attack'/'final'
+    const phaseName = next;
     const ap = state.activePlayer;
     const p = newState[ap];
     for (const z of ['left','center','right']) {
@@ -1876,6 +1929,32 @@ export function advancePhase(state) {
       if (!card) continue;
       const trigger = parsePhaseTrigger(card.text || '');
       if (!trigger || trigger.phase !== phaseName) continue;
+
+      // ✅ fix67: 조건부 트리거 체크
+      if (trigger.condition) {
+        const cond = trigger.condition;
+        let condMet = false;
+        if (cond.fieldMonsterNameContains) {
+          const nm = cond.fieldMonsterNameContains;
+          condMet = ['left','center','right'].some(fz => {
+            const fc = p.field[fz];
+            if (!fc) return false;
+            const nameMatch = (fc.name||'').toLowerCase().includes(nm);
+            if (cond.fieldMonsterSize) return nameMatch && (fc._originalSize ?? fc.size) === cond.fieldMonsterSize;
+            return nameMatch;
+          });
+        }
+        if (!condMet && cond.fieldNameContains) {
+          const nm = cond.fieldNameContains;
+          condMet = ['left','center','right'].some(fz => p.field[fz] && (p.field[fz].name||'').toLowerCase().includes(nm));
+        }
+        if (!condMet && cond.maxLife) condMet = p.life <= cond.maxLife;
+        if (!condMet && cond.equippedNameContains) {
+          condMet = p.item && (p.item.name||'').toLowerCase().includes(cond.equippedNameContains);
+        }
+        if (!condMet) continue;
+      }
+
       const def = ap === 'player' ? 'ai' : 'player';
       let pp = { ...newState[ap] };
       if (trigger.gainGauge && pp.deck.length > 0) {
@@ -1889,6 +1968,29 @@ export function advancePhase(state) {
       }
       if (trigger.gainLife) {
         pp = { ...pp, life: Math.min(pp.life + trigger.gainLife, 30) };
+        newState = { ...newState, log: [...newState.log, `❤️ ${card.name}: 라이프 +${trigger.gainLife}`] };
+      }
+      // ✅ fix67: 파워/크리티컬/방어 버프
+      if (trigger.powerBuff || trigger.critBuff || trigger.defenseBuff) {
+        const curCard = pp.field[z];
+        if (curCard) {
+          const buffed = {
+            ...curCard,
+            power: (curCard.power ?? 0) + (trigger.powerBuff ?? 0),
+            critical: (curCard.critical ?? 1) + (trigger.critBuff ?? 0),
+            defense: (curCard.defense ?? 0) + (trigger.defenseBuff ?? 0),
+            _buffed: true,
+          };
+          pp = { ...pp, field: { ...pp.field, [z]: buffed } };
+          const bl = [trigger.powerBuff&&`파워+${trigger.powerBuff}`,trigger.critBuff&&`크리티컬+${trigger.critBuff}`,trigger.defenseBuff&&`방어+${trigger.defenseBuff}`].filter(Boolean).join(', ');
+          newState = { ...newState, log: [...newState.log, `⬆️ ${card.name}: ${bl}`] };
+        }
+      }
+      if (trigger.fieldPowerBuff) {
+        const nf = {};
+        for (const fz of ['left','center','right']) nf[fz] = pp.field[fz] ? { ...pp.field[fz], power: (pp.field[fz].power??0)+trigger.fieldPowerBuff, _buffed:true } : null;
+        pp = { ...pp, field: nf };
+        newState = { ...newState, log: [...newState.log, `⬆️ ${card.name}: 필드 전체 파워+${trigger.fieldPowerBuff}`] };
       }
       newState = { ...newState, [ap]: pp };
     }

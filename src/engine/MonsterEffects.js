@@ -740,32 +740,112 @@ export function applyEnterEffect(state, card, ownerSide) {
 
 export function parsePhaseTrigger(text = '') {
   if (!text) return null;
-  const m = text.match(/[Aa]t\s+the\s+(?:start|beginning)\s+of\s+your\s+(\w+)\s+phase[,.]?\s*([\s\S]*?)(?=|\[Act\]|\[Auto\]|$)/i);
+  const m = text.match(/[Aa]t\s+the\s+(?:start|beginning)\s+of\s+your\s+(\w+)\s+phase[,.]?\s*([\s\S]*?)(?=\n\n|\[Act\]|\[Auto\]|\[Counter\]|$)/i);
   if (!m) return null;
   const phase = m[1].toLowerCase(); // main, attack, final
-  const effectText = m[2];
+  const fullText = m[2];
   const effect = { phase };
 
+  // ── 조건부 처리 (if ... , effectText) ─────────────────
+  // "if X, do Y" 패턴 분리
+  const condMatch = fullText.match(/^if\s+(.*?)[,.]\s*([\s\S]+)/i);
+  let effectText = fullText;
+  if (condMatch) {
+    const condStr = condMatch[1].toLowerCase();
+    effectText = condMatch[2];
+    // 조건 파싱
+    const cond = {};
+    // "an originally size N monster with 'X' in its card name is on your field"
+    const sizeNameM = condStr.match(/(?:originally\s+)?size\s*(\d+)\s+monster\s+with\s+["']([^"']+)["']/i);
+    if (sizeNameM) {
+      cond.fieldMonsterSize = parseInt(sizeNameM[1]);
+      cond.fieldMonsterNameContains = sizeNameM[2].trim().toLowerCase();
+    }
+    // "a monster with 'X' in its card name is on your field"
+    const nameM = condStr.match(/(?:a|an)\s+.*?(?:monster|card)\s+with\s+["']([^"']+)["']\s+in\s+its\s+card\s+name/i);
+    if (!sizeNameM && nameM) cond.fieldMonsterNameContains = nameM[1].trim().toLowerCase();
+    // "you have N life or less"
+    const lifeM = condStr.match(/you have (\d+) life or less/i);
+    if (lifeM) cond.maxLife = parseInt(lifeM[1]);
+    // "there is a «X» on your field"
+    const fieldM = condStr.match(/(?:there is|you have)\s+(?:a|an)?\s*[«"]([^»"]+)[»"]\s+on\s+your\s+field/i);
+    if (fieldM) cond.fieldNameContains = fieldM[1].trim().toLowerCase();
+    // "your equipped «X»"
+    const equipM = condStr.match(/your\s+equipped\s+[«"]([^»"]+)[»"]/i);
+    if (equipM) cond.equippedNameContains = equipM[1].trim().toLowerCase();
+
+    if (Object.keys(cond).length > 0) effect.condition = cond;
+  }
+
+  // ── 효과 파싱 ─────────────────────────────────────────
   const drawM = effectText.match(/draw\s+(\d+)\s+cards?/i) || (/draw\s+a\s+card/i.test(effectText) ? ['','1'] : null);
-  if (drawM) effect.draw = parseInt(drawM[1]);
+  if (drawM) effect.draw = parseInt(drawM[1]) || 1;
   if (/put\s+the\s+top\s+card.*?gauge|into\s+your\s+gauge/i.test(effectText)) effect.gainGauge = 1;
   const gainM = effectText.match(/you\s+gain\s+(\d+)\s+life/i);
   if (gainM) effect.gainLife = parseInt(gainM[1]);
-  // 조건부 데미지: "if you have N life or less, deal X damage"
   const condDmgM = effectText.match(/if\s+you\s+have\s+(\d+)\s+life\s+or\s+less[,.]?\s+deal\s+(\d+)\s+damage/i);
-  if (condDmgM) {
-    effect.conditionalDamage = parseInt(condDmgM[2]);
-    effect.conditionalDamageLifeThreshold = parseInt(condDmgM[1]);
-  }
-  // 무조건 데미지 (조건부가 아닐 때만)
+  if (condDmgM) { effect.conditionalDamage = parseInt(condDmgM[2]); effect.conditionalDamageLifeThreshold = parseInt(condDmgM[1]); }
   const dmgM = !condDmgM && effectText.match(/^(?!.*if\s+you\s+have).*deal\s+(\d+)\s+damage/im);
   if (dmgM) effect.damage = parseInt(dmgM[1]);
-  // Then, if ... deal damage (조건부)
   const thenIfDmg = effectText.match(/[Tt]hen,?\s+if\s+you\s+have\s+(\d+)\s+life\s+or\s+less.*?deal\s+(\d+)\s+damage/is);
-  if (thenIfDmg && !condDmgM) {
-    effect.conditionalDamage = parseInt(thenIfDmg[2]);
-    effect.conditionalDamageLifeThreshold = parseInt(thenIfDmg[1]);
+  if (thenIfDmg && !condDmgM) { effect.conditionalDamage = parseInt(thenIfDmg[2]); effect.conditionalDamageLifeThreshold = parseInt(thenIfDmg[1]); }
+  // 파워/크리티컬 버프 "this card gets power+N and critical+N"
+  const powM = effectText.match(/(?:this\s+card\s+gets?|get)\s+power\+(\d+)/i);
+  if (powM) effect.powerBuff = parseInt(powM[1]);
+  const critM = effectText.match(/critical\+(\d+)/i);
+  if (critM) effect.critBuff = parseInt(critM[1]);
+  const defM = effectText.match(/(?:this\s+card\s+gets?|get)\s+defense\+(\d+)/i);
+  if (defM) effect.defenseBuff = parseInt(defM[1]);
+  // 전체 필드 버프 "all ... get power+N"
+  const allPowM = effectText.match(/all\s+(?:«[^»]+»\s+)?(?:monsters?\s+on\s+your\s+field|cards?)\s+get(?:s?)\s+power\+(\d+)/i);
+  if (allPowM) effect.fieldPowerBuff = parseInt(allPowM[1]);
+  // 드롭에서 소환 "call a ... from drop"
+  if (/call.*?from.*?(?:drop|drop\s+zone)/i.test(effectText)) effect.callFromDrop = true;
+  // 손패에서 소환
+  if (/call.*?from.*?hand/i.test(effectText)) effect.callFromHand = true;
+  // stand self
+  if (/\[stand\]\s+this|stand\s+this\s+card/i.test(effectText)) effect.standSelf = true;
+
+  return Object.keys(effect).length > 1 ? effect : null;
+}
+
+// ✅ fix67: 파괴 방지 효과 파싱
+// "If this card would be destroyed, you may [cost]. If you do, this card remains on the field!"
+export function parsePreventDestroyEffect(text = '') {
+  if (!text) return null;
+  const m = text.match(/[Ii]f\s+this\s+card\s+would\s+be\s+destroyed[,.]?\s+([\s\S]*?)(?=\n\n|\[Act\]|\[Auto\]|$)/i);
+  if (!m) return null;
+  const effectText = m[1];
+  const effect = {};
+
+  // "you may discard a non-monster card from your hand"
+  if (/discard\s+a\s+non-monster\s+card\s+from\s+your\s+hand/i.test(effectText)) {
+    effect.preventCost = 'discardNonMonster';
   }
+  // "you may discard a card from your hand"
+  else if (/discard\s+(?:a|one)\s+(?:hand\s+)?card\s+from\s+your\s+hand|discard\s+a\s+card/i.test(effectText)) {
+    effect.preventCost = 'discardCard';
+  }
+  // "you may pay N gauge"
+  else if (/pay\s+(\d+)\s+gauge/i.test(effectText)) {
+    const gm = effectText.match(/pay\s+(\d+)\s+gauge/i);
+    effect.preventCost = 'gauge';
+    effect.preventGaugeCost = parseInt(gm[1]);
+  }
+  // "you may put a soul from this card into the drop zone"
+  else if (/put\s+a\s+soul\s+from/i.test(effectText)) {
+    effect.preventCost = 'dropSoul';
+  }
+  // "you may pay N life"
+  else if (/pay\s+(\d+)\s+life/i.test(effectText)) {
+    const lm = effectText.match(/pay\s+(\d+)\s+life/i);
+    effect.preventCost = 'life';
+    effect.preventLifeCost = parseInt(lm[1]);
+  }
+
+  // "this card remains on the field" 확인
+  if (!/(remains?\s+on\s+the\s+field|is\s+not\s+destroyed|cannot\s+be\s+destroyed)/i.test(effectText)) return null;
+  effect.remainsOnField = true;
 
   return Object.keys(effect).length > 1 ? effect : null;
 }

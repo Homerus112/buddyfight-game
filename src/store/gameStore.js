@@ -57,15 +57,21 @@ const useGameStore = create((set, get) => ({
     // 플레이어가 스펠 사용하면 즉시 resolve(수정된state)
     // 2.5초 타임아웃 후 resolve(null) → 공격 진행
     const counterCb = async (aiState, zone, card, target) => {
-      // [Counter] 태그가 있는 스펠만 필터링
+      // ✅ fix67: [Counter] 스펠 + [Counter][Act] 몬스터(손패+필드) 모두 체크
       const hasCounterSpell = aiState.player.hand.some(c =>
         (c.type === 3 || c.type === 4) && /\[Counter\]/i.test(c.text||'')
       );
-      if (!hasCounterSpell) return null;
+      const hasCounterActMonsterHand = aiState.player.hand.some(c =>
+        c.type === 1 && /\[Counter\]/i.test(c.text||'') && /\[Act\]/i.test(c.text||'')
+      );
+      const hasCounterActMonsterField = ['left','center','right','item'].some(fz => {
+        const fc = fz === 'item' ? aiState.player.item : aiState.player.field[fz];
+        return fc && /\[Counter\]/i.test(fc.text||'') && /\[Act\]/i.test(fc.text||'');
+      });
+      if (!hasCounterSpell && !hasCounterActMonsterHand && !hasCounterActMonsterField) return null;
       return new Promise(resolve => {
         _counterResolve = resolve;
         set({ gameState: aiState, counterWindow: { attackerCard: card, targetZone: target, zone } });
-        // 시간 제한 없음 - 플레이어가 패스/스펠 선택할 때까지 대기
       });
     };
 
