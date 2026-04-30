@@ -4,7 +4,7 @@ import { t as i18nT } from '../../i18n/useI18n.js';
 import useGameStore from '../../store/gameStore.js';
 import Card from '../Card/Card.jsx';
 import CardModal from '../UI/CardModal.jsx';
-import { TURN_PHASE, TURN_PHASE_NAME, TURN_PHASE_NAME_EN, CARD_TYPE, CARD_STATE } from '../../utils/constants.js';
+import { TURN_PHASE, TURN_PHASE_NAME, CARD_TYPE, CARD_STATE } from '../../utils/constants.js';
 
 // ── 버디 콜 팝업 ──────────────────────────────────
 function BuddyCallPopup({ name }) {
@@ -957,7 +957,7 @@ reMatch ? reMatch() : goToMenu();
           <button onClick={bgmNext} title="다음 곡" style={{background:'rgba(255,255,255,0.05)',color:'#888',border:'1px solid rgba(255,255,255,0.08)',borderRadius:6,padding:'3px 8px',cursor:'pointer',fontSize:13}}>⏭</button>
           <span style={{color:'#c8a96e',fontWeight:'bold',fontSize:13}}>Turn {turn}</span>
           <span style={{background:'rgba(255,255,255,0.08)',padding:'2px 10px',borderRadius:20,fontSize:11,color:'#81b4cf',border:'1px solid rgba(129,180,207,0.3)'}}>
-            {(lang==='ko' ? TURN_PHASE_NAME : TURN_PHASE_NAME_EN)[phase]}
+            {lang==='ko' ? TURN_PHASE_NAME[phase] : ({stand:'① Stand',draw:'② Draw',charge:'③ Charge',main:'④ Main',attack:'⑤ Attack',final:'⑥ Final',end:'⑦ End'})[phase]}
           </span>
           {isAIThinking&&<span style={{color:'#fd79a8',fontSize:11,animation:'pulse 1s infinite'}}>● {T('AI 진행 중...','AI Thinking...')}</span>}
           {isFirstTurn&&isMyTurn&&<span style={{color:'#fdcb6e',fontSize:11}}>⚠ {T('선공 첫 턴','1st Turn')}</span>}
