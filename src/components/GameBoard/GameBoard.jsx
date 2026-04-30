@@ -685,7 +685,7 @@ export default function GameBoard() {
           onCancel={cancelDiscard}
           lang={lang}
         />
-      )}}
+      )}
       {showLinkTarget && <LinkTargetOverlay ai={ai} onSelect={z=>{setShowLinkTarget(false);executeLinkAttack(z);}} onCancel={()=>setShowLinkTarget(false)}/>}
       {showMoveUI && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:150}}>
