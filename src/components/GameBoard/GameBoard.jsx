@@ -403,6 +403,7 @@ function CounterOverlay({ player, info, onUse, onPass, onUseFieldAct, lang }) {
                   <div style={{position:'absolute',top:2,left:2,background:'#0984e3',color:'#fff',fontSize:7,padding:'1px 3px',borderRadius:2,zIndex:1}}>🔵</div>
                   {clicked===c.instanceId && <div style={{position:'absolute',inset:-2,border:'2px solid #ffd700',borderRadius:8,zIndex:2,pointerEvents:'none'}}/>}
                   <div onClick={()=>handleCardClick(c.instanceId)} onDoubleClick={()=>onUse(c.instanceId)}
+                    onContextMenu={(e)=>{ e.preventDefault(); setPreviewCard(c); }}
                     style={{cursor:'pointer',border:`2px solid ${clicked===c.instanceId?'#ffd700':'#e17055'}`,borderRadius:6,overflow:'hidden'}}>
                     <Card card={c} displayMode="hand"/>
                   </div>
@@ -497,7 +498,58 @@ function ChargeOverlay({ player, onSelect, onSkip }) {
   );
 }
 
-// ✅ fix68: 손패 선택 버리기 팝업
+// ✅ fix71: 덱 서치 선택 팝업
+function DeckSearchOverlay({ cards, maxCount, onSelect, onCancel, lang }) {
+  const T = (ko, en) => (lang||'ko') === 'ko' ? ko : en;
+  const [selected, setSelected] = React.useState([]);
+  const toggle = (id) => {
+    setSelected(prev =>
+      prev.includes(id) ? prev.filter(x=>x!==id) : prev.length < maxCount ? [...prev, id] : prev
+    );
+  };
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200}}>
+      <div style={{background:'#1a2332',border:'1px solid #6c5ce7',borderRadius:12,padding:20,maxWidth:600,width:'95vw',maxHeight:'80vh',display:'flex',flexDirection:'column'}}>
+        <div style={{fontSize:14,fontWeight:'bold',color:'#a29bfe',marginBottom:4}}>
+          🔍 {T('덱에서 카드 선택','Choose from Deck')} ({T(`최대 ${maxCount}장`,`Up to ${maxCount}`)})
+        </div>
+        <div style={{fontSize:11,color:'#aaa',marginBottom:10}}>
+          {T(`${selected.length}/${maxCount}장 선택됨`,`${selected.length}/${maxCount} selected`)}
+        </div>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap',overflowY:'auto',flex:1,paddingBottom:4}}>
+          {cards.map(c=>(
+            <div key={c.instanceId} onClick={()=>toggle(c.instanceId)} style={{
+              position:'relative', cursor:'pointer',
+              border:`2px solid ${selected.includes(c.instanceId)?'#ffd700':'rgba(108,92,231,0.4)'}`,
+              borderRadius:6, overflow:'hidden', opacity: selected.length>=maxCount&&!selected.includes(c.instanceId)?0.4:1,
+              transition:'all 0.15s',
+            }}>
+              {selected.includes(c.instanceId) && (
+                <div style={{position:'absolute',top:2,right:2,background:'#ffd700',color:'#000',borderRadius:'50%',width:16,height:16,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:'bold',zIndex:1}}>✓</div>
+              )}
+              <Card card={c} displayMode="hand"/>
+              <div style={{background:'rgba(0,0,0,0.8)',padding:'2px 4px',fontSize:9,color:'#ccc',textAlign:'center',maxWidth:80,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                {c.name}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:12}}>
+          <button onClick={onCancel} style={{background:'transparent',color:'#aaa',border:'1px solid #555',borderRadius:6,padding:'7px 16px',cursor:'pointer',fontSize:12}}>
+            {T('취소','Cancel')}
+          </button>
+          <button onClick={()=>selected.length>0&&onSelect(selected)}
+            disabled={selected.length===0}
+            style={{background:selected.length>0?'#6c5ce7':'#555',color:'#fff',border:'none',borderRadius:6,padding:'7px 16px',cursor:selected.length>0?'pointer':'default',fontSize:12,fontWeight:'bold'}}>
+            {T(`${selected.length}장 선택`,`Select ${selected.length}`)}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 손패 선택 버리기 ─────────────────────────────
 function DiscardSelectOverlay({ player, pendingDiscard, onResolve, onCancel, lang }) {
   const T = (ko, en) => (lang||'ko') === 'ko' ? ko : en;
   const [selected, setSelected] = React.useState([]);
@@ -586,6 +638,7 @@ export default function GameBoard() {
     lang, pendingActChoice, resolveActChoice, clearActChoice, resolveChooseEnter,
     saveGameState,
     pendingDiscard, resolveDiscard, cancelDiscard, // ✅ fix68
+    pendingDeckSearch, resolveDeckSearch, cancelDeckSearch, // ✅ fix71
   } = useGameStore();
 
   // ✅ fix69: _pendingPreventDestroy를 pendingDiscard로 변환
@@ -598,6 +651,28 @@ export default function GameBoard() {
       });
     }
   }, [gameState?._pendingPreventDestroy]);
+
+  // ✅ fix71: _pendingDeckSearch를 pendingDeckSearch로 변환
+  useEffect(() => {
+    if (gameState?._pendingDeckSearch && !useGameStore.getState().pendingDeckSearch) {
+      const { cards: dcards, maxCount, dropIfMax, context } = gameState._pendingDeckSearch;
+      useGameStore.setState({
+        pendingDeckSearch: { cards: dcards, maxCount, dropIfMax, context },
+        gameState: { ...gameState, _pendingDeckSearch: undefined },
+      });
+    }
+  }, [gameState?._pendingDeckSearch]);
+
+  // ✅ fix71: _pendingDiscardAfterSearch를 pendingDiscard로 변환 (Tsukikage Re:B 덱 서치 후)
+  useEffect(() => {
+    if (gameState?._pendingDiscardAfterSearch && !pendingDiscard) {
+      const { count, context } = gameState._pendingDiscardAfterSearch;
+      useGameStore.setState({
+        pendingDiscard: { count, context, filter: null },
+        gameState: { ...gameState, _pendingDiscardAfterSearch: undefined },
+      });
+    }
+  }, [gameState?._pendingDiscardAfterSearch]);
 
   const [logOpen, setLogOpen] = useState(true);
   const [bgmState, setBgmState] = useState({playing:false,title:''});
@@ -741,6 +816,16 @@ export default function GameBoard() {
           passCounter();
         }}
       />}
+      {/* ✅ fix71: 덱 서치 선택 팝업 */}
+      {pendingDeckSearch && (
+        <DeckSearchOverlay
+          cards={pendingDeckSearch.cards}
+          maxCount={pendingDeckSearch.maxCount}
+          onSelect={(ids) => resolveDeckSearch(ids)}
+          onCancel={cancelDeckSearch}
+          lang={lang}
+        />
+      )}
       {/* ✅ fix68: 손패 선택 버리기 팝업 */}
       {pendingDiscard && (
         <DiscardSelectOverlay

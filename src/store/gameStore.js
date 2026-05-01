@@ -26,6 +26,7 @@ const useGameStore = create((set, get) => ({
   pendingChooseEffect: null, // { instanceId, options: [{text, effect}] }
   pendingActChoice: null,   // { zone, effects: [{label, idx}] }
   pendingDiscard: null,     // ✅ fix68: { count, filter, resolve, context } 손패 선택 버리기
+  pendingDeckSearch: null,  // ✅ fix71: { cards, maxCount, context } 덱 서치 팝업
   chargeStep: null,
   counterWindow: null,   // { attackerCard, targetZone } AI 공격 시 카운터 타이밍
   linkMode: false,
@@ -307,6 +308,30 @@ const useGameStore = create((set, get) => ({
     }
   },
   cancelDiscard: () => set({ pendingDiscard: null }),
+
+  // ✅ fix71: 덱 서치 결과 처리
+  resolveDeckSearch: (instanceIds) => {
+    const { gameState, pendingDeckSearch } = get();
+    if (!pendingDeckSearch || !gameState) return;
+    const ap = gameState.activePlayer;
+    const p = gameState[ap];
+    const pickedCards = p.deck.filter(c => instanceIds.includes(c.instanceId));
+    if (pickedCards.length === 0) { set({ pendingDeckSearch: null }); return; }
+    const pickedSet = new Set(instanceIds);
+    const newDeck = [...p.deck].filter(c => !pickedSet.has(c.instanceId));
+    const shuffled = newDeck.sort(() => Math.random() - 0.5);
+    const newState = {
+      ...gameState,
+      [ap]: { ...p, hand: [...p.hand, ...pickedCards], deck: shuffled },
+      log: [...gameState.log, `🔍 덱 서치: ${pickedCards.map(c=>c.name).join(', ')} → 손패`],
+      // 2장 가져왔을 경우 손패 버리기 처리
+      ...(pendingDeckSearch.dropIfMax && pickedCards.length >= pendingDeckSearch.maxCount
+        ? { _pendingDiscardAfterSearch: { count: 1, context: 'advSearchDrop' } }
+        : {}),
+    };
+    set({ gameState: newState, pendingDeckSearch: null });
+  },
+  cancelDeckSearch: () => set({ pendingDeckSearch: null }),
 
   resolveChooseEnter: (chosenEffect) => {
     const { gameState } = get();
