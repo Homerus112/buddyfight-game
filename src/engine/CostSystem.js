@@ -81,6 +81,18 @@ export function parseCastCondition(text = '') {
   if (condText.includes('final phase')) cond.finalPhase = true;
   if (condText.includes("opponent's final")) cond.opponentFinalPhase = true;
 
+  // ✅ fix72: G.BOOST 사용 조건
+  // "you used [G.BOOST] during this turn" → requireGboostUsed: 'any'
+  // "you used [G.BOOST-Base-] during this turn" → requireGboostUsed: 'base'
+  const gboostUsedM = text.match(/you\s+used\s+\[G\.BOOST(-[^\]]+-)?\]\s+during\s+this\s+turn/i);
+  if (gboostUsedM) {
+    cond.requireGboostUsed = (gboostUsedM[1] || '-any-').replace(/-/g,'').toLowerCase() || 'any';
+  }
+  // "a card with [G.BOOST] is on your field" → requireGboostOnField
+  if (/a\s+card\s+with\s+\[G\.BOOST[^\]]*\]\s+is\s+on\s+your\s+field/i.test(text)) {
+    cond.requireGboostOnField = true;
+  }
+
   return Object.keys(cond).length > 0 ? cond : null;
 }
 
@@ -118,6 +130,8 @@ export function canPayCost(playerState, cost) {
   return errors.length === 0 ? { ok: true } : { ok: false, errors };
 }
 
+const re_gboost = /\[G\.BOOST/i; // G.BOOST 카드 식별용
+
 export function canCastSpell(gameState, card, casterSide) {
   const text = card.text || '';
   const cond = parseCastCondition(text);
@@ -148,6 +162,23 @@ export function canCastSpell(gameState, card, casterSide) {
       (c.text||'').toLowerCase().includes(kw)
     ));
     if (!hasIt) errors.push(`필드에 «${cond.requireFieldMonster}» 필요`);
+  }
+  // ✅ fix72: G.BOOST 사용 여부 체크
+  if (cond.requireGboostUsed) {
+    const used = gameState._gboostUsedThisTurn || [];
+    const needed = (cond.requireGboostUsed || 'base').toLowerCase();
+    if (needed === 'any') {
+      if (used.length === 0) errors.push('[G.BOOST] 이번 턴에 사용 필요');
+    } else {
+      if (!used.some(g => g.toLowerCase().includes(needed.replace('g.boost-','').replace('-','')))) {
+        errors.push(`[G.BOOST-${needed}-] 이번 턴에 사용 필요`);
+      }
+    }
+  }
+  // G.BOOST 필드 카드 필요 체크
+  if (cond.requireGboostOnField) {
+    const hasGB = Object.values(p.field).some(c => c && re_gboost.test(c.text||''));
+    if (!hasGB) errors.push('[G.BOOST] 카드가 필드에 필요');
   }
   return errors.length === 0 ? { ok: true } : { ok: false, errors };
 }

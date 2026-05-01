@@ -79,37 +79,51 @@ export function parseEnterEffect(text = '') {
   if (deckToHandM && !effect.advSearch) { effect.deckToHand = true; effect.deckToHandKw = deckToHandM[1] || null; }
   if (/shuffle\s+your\s+deck/i.test(effectText)) effect.shuffleDeck = true;
 
-  // ✅ fix68: advSearch - 조건부 덱 서치 (Tsukikage Re:B 등)
+  // ✅ fix71: advSearch → pendingDeckSearch 팝업으로 처리 (플레이어가 직접 선택)
   if (effect.advSearch && p.deck.length > 0) {
     const { maxCount, size, world, excludeName, differentNames } = effect.advSearch;
+    // 선택 가능한 카드 목록 필터링
     const usedNames = new Set();
-    const picked = [];
+    const candidates = [];
     for (const dc of p.deck) {
-      if (picked.length >= maxCount) break;
       if (size != null && (dc.size ?? 0) !== size) continue;
-      if (world && !(dc.tribe||'').toLowerCase().includes(world) && !(dc.world_name||'').toLowerCase().includes(world)) {
-        // world 체크: tribe에 world명 포함 or 카드 world 속성으로 매핑
-        // world_name이 없으므로 type/world 번호로 대조
+      if (world) {
         const worldMap = {'katana world':1,'danger world':2,'magic world':3,'dungeon world':4,'legend world':5,'dragon world':6,'ancient world':7,'darkness dragon world':9,'hero world':10,'star dragon world':11};
-        const wNum = worldMap[world];
+        const wNum = worldMap[world.toLowerCase()];
         if (wNum && dc.world !== wNum && dc.world !== 8) continue;
-        if (!wNum) continue;
+        if (!wNum && !(dc.tribe||'').toLowerCase().includes(world.toLowerCase())) continue;
       }
-      if (excludeName && (dc.name||'').toLowerCase().includes(excludeName)) continue;
-      if (differentNames && usedNames.has((dc.name||'').toLowerCase())) continue;
-      if (differentNames) usedNames.add((dc.name||'').toLowerCase());
-      picked.push(dc);
+      if (excludeName && (dc.name||'').toLowerCase().includes(excludeName.toLowerCase())) continue;
+      if (differentNames) {
+        if (usedNames.has((dc.name||'').toLowerCase())) continue;
+        usedNames.add((dc.name||'').toLowerCase());
+      }
+      candidates.push(dc);
     }
-    if (picked.length > 0) {
-      const pickedIds = new Set(picked.map(c=>c.instanceId));
-      p = { ...p, hand: [...p.hand, ...picked], deck: p.deck.filter(c=>!pickedIds.has(c.instanceId)) };
-      if (effect.shuffleDeck) p = { ...p, deck: [...p.deck].sort(()=>Math.random()-0.5) };
-      logs.push(`🔍 ${card.name}: 덱 서치 ${picked.length}장 → 손패 (${picked.map(c=>c.name).join(', ')})`);
-      // "If you put two, drop a hand card" - pendingDiscard로 처리 (플레이어 선택)
-      if (effect.advSearchDropIfMax && picked.length >= maxCount && ownerSide === 'player') {
-        // 나중에 GameBoard에서 pendingDiscard UI로 처리
-        return { ...state, [ownerSide]: p, [def]: defP, log: [...state.log, ...logs],
-          _pendingDiscardAfterSearch: { count: 1, context: 'advSearchDrop' } };
+    if (candidates.length > 0 && ownerSide === 'player') {
+      // 플레이어: 팝업으로 선택
+      return {
+        ...state, [ownerSide]: p, [def]: defP, log: [...state.log, ...logs],
+        _pendingDeckSearch: {
+          cards: candidates,
+          maxCount,
+          dropIfMax: !!effect.advSearchDropIfMax,
+          context: 'advSearch'
+        }
+      };
+    } else if (candidates.length > 0) {
+      // AI: 자동으로 최대 maxCount 장 선택
+      const picked = candidates.slice(0, maxCount);
+      const pickedIds = new Set(picked.map(c => c.instanceId));
+      p = { ...p, hand: [...p.hand, ...picked], deck: p.deck.filter(c => !pickedIds.has(c.instanceId)).sort(() => Math.random()-0.5) };
+      logs.push(`🔍 ${card.name}: 덱 서치 ${picked.length}장 → 손패`);
+      if (effect.advSearchDropIfMax && picked.length >= maxCount) {
+        // AI: 임의로 손패 카드 1장 버리기
+        if (p.hand.length > 0) {
+          const toDiscard = p.hand[p.hand.length - 1];
+          p = { ...p, hand: p.hand.slice(0, -1), drop: [...p.drop, toDiscard] };
+          logs.push(`🗑️ ${toDiscard.name} 버림 (서치 비용)`);
+        }
       }
     }
   }
@@ -790,6 +804,42 @@ export function applyEnterEffect(state, card, ownerSide) {
 
 export function parsePhaseTrigger(text = '') {
   if (!text) return null;
+  // ✅ fix72: G.BOOST 처리
+  // "[G.BOOST-X-] At the start of your attack phase, ..." 패턴
+  const gboostM = text.match(/^\[G\.BOOST(-[^\]]+-)?\]\s*([\s\S]*)/im);
+  if (gboostM) {
+    const gboostType = (gboostM[1] || '-Base-').replace(/-/g, '').toLowerCase(); // base/craft/etc
+    const gboostText = gboostM[2];
+    const effect = { phase: 'attack', gboost: true, gboostType };
+
+    // 효과 파싱 (공격 페이즈 시작 시 적용)
+    const powM = gboostText.match(/all\s+(?:cards?|monsters?)\s+on\s+your\s+field\s+get(?:s?)\s+power\+(\d+)/i);
+    if (powM) effect.fieldPowerBuff = parseInt(powM[1]);
+    const critM = gboostText.match(/this\s+card\s+gets?\s+critical\+(\d+)/i);
+    if (critM) effect.critBuff = parseInt(critM[1]);
+    const penM = /all\s+monsters.*?\[Penetrate\]/i.test(gboostText);
+    if (penM) effect.grantFieldPenetrate = true;
+    const tripleM = /all\s+(?:cards?|monsters?).*?\[Triple\s+Attack\]/i.test(gboostText);
+    if (tripleM) effect.grantFieldTriple = true;
+    // Then-if 조건 (다른 «Deity Dragon Tribe» 있으면 추가 효과)
+    const thenIfM = gboostText.match(/[Tt]hen,?\s+if\s+(?:you\s+have\s+)?another\s+(?:«[^»]+»|"[^"]+")\s+(?:is\s+)?on\s+your\s+field[,.]?\s*([\s\S]*?)(?=\n\n|$)/i);
+    if (thenIfM) {
+      const thenText = thenIfM[1];
+      const thenPowM = thenText.match(/all\s+(?:cards?|monsters?).*?power\+(\d+)/i);
+      if (thenPowM) effect.gboostThenFieldPower = parseInt(thenPowM[1]);
+      if (/\[Triple\s+Attack\]/i.test(thenText)) effect.gboostThenTriple = true;
+      if (/\[Double\s+Attack\]/i.test(thenText)) effect.gboostThenDouble = true;
+      if (/\[Shadow\s+Dive\]/i.test(thenText)) effect.gboostThenShadowDive = true;
+      const condM2 = gboostText.match(/[Tt]hen,?\s+if\s+(?:you\s+have\s+)?another\s+(«[^»]+»|"[^"]+")/i);
+      if (condM2) effect.gboostThenCondTribe = condM2[1].replace(/[«»"]/g,'').trim().toLowerCase();
+    }
+    // draw
+    const drawM2 = gboostText.match(/draw\s+(\d+|a)\s+cards?/i);
+    if (drawM2) effect.draw = drawM2[1]==='a'?1:parseInt(drawM2[1]);
+
+    return Object.keys(effect).length > 2 ? effect : null;
+  }
+
   const m = text.match(/[Aa]t\s+the\s+(?:start|beginning)\s+of\s+your\s+(\w+)\s+phase[,.]?\s*([\s\S]*?)(?=\n\n|\[Act\]|\[Auto\]|\[Counter\]|$)/i);
   if (!m) return null;
   const phase = m[1].toLowerCase(); // main, attack, final

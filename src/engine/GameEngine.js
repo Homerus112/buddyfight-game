@@ -1469,6 +1469,7 @@ export function endTurn(state) {
     linkAttackQueue: [], pendingDamage: 0,
     _usedThisTurn: {},
     _attackCountThisTurn: 0,
+    _gboostUsedThisTurn: [],  // ✅ fix72: G.BOOST 사용 기록 초기화
     log: [...state.log, `\n--- ${next==='player'?'🎮 내':'🤖 AI'} 턴 (${nextTurn}턴) ---`],
   };
 
@@ -2169,6 +2170,67 @@ export function advancePhase(state) {
         for (const fz of ['left','center','right']) nf[fz] = pp.field[fz] ? { ...pp.field[fz], power: (pp.field[fz].power??0)+trigger.fieldPowerBuff, _buffed:true } : null;
         pp = { ...pp, field: nf };
         newState = { ...newState, log: [...newState.log, `⬆️ ${card.name}: 필드 전체 파워+${trigger.fieldPowerBuff}`] };
+      }
+      // ✅ fix72: G.BOOST 효과 적용
+      if (trigger.gboost) {
+        // 필드 전체 파워 버프
+        if (trigger.fieldPowerBuff) {
+          const nf = {};
+          for (const fz of ['left','center','right']) nf[fz] = pp.field[fz] ? { ...pp.field[fz], power: (pp.field[fz].power??0)+trigger.fieldPowerBuff, _buffed:true } : null;
+          pp = { ...pp, field: nf };
+        }
+        // Penetrate 부여
+        if (trigger.grantFieldPenetrate) {
+          const nf = {};
+          for (const fz of ['left','center','right']) {
+            if (pp.field[fz]) nf[fz] = { ...pp.field[fz], _conditionalKws: [...(pp.field[fz]._conditionalKws||[]), 'Penetrate'] };
+            else nf[fz] = null;
+          }
+          pp = { ...pp, field: nf };
+        }
+        // Triple Attack 부여
+        if (trigger.grantFieldTriple) {
+          const nf = {};
+          for (const fz of ['left','center','right']) {
+            if (pp.field[fz]) nf[fz] = { ...pp.field[fz], _conditionalKws: [...(pp.field[fz]._conditionalKws||[]), 'Triple Attack'] };
+            else nf[fz] = null;
+          }
+          pp = { ...pp, field: nf };
+        }
+        // 크리티컬 버프 (이 카드)
+        if (trigger.critBuff) {
+          const cur = pp.field[z];
+          if (cur) pp = { ...pp, field: { ...pp.field, [z]: { ...cur, critical: (cur.critical??1)+trigger.critBuff, _buffed:true } } };
+        }
+        // Then-if 조건: 다른 «X»가 필드에 있으면 추가 효과
+        if (trigger.gboostThenCondTribe) {
+          const tribeOK = ['left','center','right'].some(fz => fz!==z && pp.field[fz] && (pp.field[fz].tribe||'').toLowerCase().includes(trigger.gboostThenCondTribe));
+          if (tribeOK) {
+            if (trigger.gboostThenFieldPower) {
+              const nf = {};
+              for (const fz of ['left','center','right']) nf[fz] = pp.field[fz] ? { ...pp.field[fz], power: (pp.field[fz].power??0)+trigger.gboostThenFieldPower, _buffed:true } : null;
+              pp = { ...pp, field: nf };
+            }
+            if (trigger.gboostThenTriple) {
+              for (const fz of ['left','center','right']) if (pp.field[fz]) pp = { ...pp, field: { ...pp.field, [fz]: { ...pp.field[fz], _conditionalKws: [...(pp.field[fz]._conditionalKws||[]), 'Triple Attack'] } } };
+            }
+            if (trigger.gboostThenDouble) {
+              for (const fz of ['left','center','right']) if (pp.field[fz]) pp = { ...pp, field: { ...pp.field, [fz]: { ...pp.field[fz], _conditionalKws: [...(pp.field[fz]._conditionalKws||[]), 'Double Attack'] } } };
+            }
+            if (trigger.gboostThenShadowDive) {
+              for (const fz of ['left','center','right']) if (pp.field[fz]) pp = { ...pp, field: { ...pp.field, [fz]: { ...pp.field[fz], _conditionalKws: [...(pp.field[fz]._conditionalKws||[]), 'Shadow Dive'] } } };
+            }
+          }
+        }
+        // G.BOOST 드로우
+        if (trigger.draw && pp.deck.length > 0) {
+          const drawn = pp.deck.slice(0, trigger.draw);
+          pp = { ...pp, hand: [...pp.hand, ...drawn], deck: pp.deck.slice(trigger.draw) };
+          newState = { ...newState, log: [...newState.log, `⚡ [G.BOOST] ${card.name}: 드로우 ${drawn.length}장`] };
+        }
+        // G.BOOST 사용 표시 (발동 조건 체크용)
+        newState = { ...newState, _gboostUsedThisTurn: [...(newState._gboostUsedThisTurn||[]), trigger.gboostType||'base'],
+          log: [...newState.log, `⚡ [G.BOOST] ${card.name} 발동!`] };
       }
       newState = { ...newState, [ap]: pp };
     }
