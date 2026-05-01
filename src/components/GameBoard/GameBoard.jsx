@@ -1255,7 +1255,7 @@ reMatch ? reMatch() : goToMenu();
           {/* ── 손패 영역 ── */}
           <div style={{
             background:'rgba(0,0,0,0.5)', borderTop:'1px solid rgba(255,255,255,0.06)',
-            padding:'5px 10px', flexShrink:0,
+            padding:'5px 10px 6px', flexShrink:0,
           }}>
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4,flexWrap:'wrap'}}>
               <span style={{fontSize:10,color:'rgba(162,155,254,0.8)'}}>🃏 손패 {player.hand.length}장</span>
@@ -1264,7 +1264,8 @@ reMatch ? reMatch() : goToMenu();
               {attackingCard&&<span style={{fontSize:10,color:'#ff6b6b',fontWeight:'bold'}}>대상 선택</span>}
               <span style={{fontSize:9,color:'rgba(255,255,255,0.2)',marginLeft:'auto'}}>더블클릭: 상세</span>
             </div>
-            <div style={{display:'flex',gap:4,flexWrap:'wrap',maxHeight:100,overflow:'hidden'}}>
+            {/* ✅ fix73: 손패 카드 maxHeight 확대 (기존 100 → 140) */}
+            <div style={{display:'flex',gap:4,flexWrap:'wrap',maxHeight:140,overflow:'hidden'}}>
               {player.hand.map(card=>(
                 <Card key={card.instanceId} card={card} isSelected={selectedCard===card.instanceId}
                   displayMode="hand" onClick={()=>onHandClick(card)}/>
@@ -1272,10 +1273,10 @@ reMatch ? reMatch() : goToMenu();
             </div>
           </div>
 
-          {/* ── 컨트롤 버튼 ── */}
+          {/* ── 컨트롤 버튼 ── ✅ fix73: 하단 패딩 최소화 */}
           <div style={{
             background:'rgba(0,0,0,0.6)', borderTop:'1px solid rgba(255,255,255,0.05)',
-            padding:'3px 8px 2px', display:'flex', gap:5, flexWrap:'wrap', justifyContent:'center', flexShrink:0,
+            padding:'3px 8px 0px', display:'flex', gap:5, flexWrap:'wrap', justifyContent:'center', flexShrink:0,
           }}>
             {isMyTurn&&!winner&&!attackingCard&&!chargeStep&&(
               <button onClick={() => { nextPhase(); setTimeout(() => saveGameState?.(), 300); }} disabled={isAIThinking} style={{
@@ -1283,7 +1284,7 @@ reMatch ? reMatch() : goToMenu();
                   ?'linear-gradient(135deg,#e17055,#d63031)'
                   :'linear-gradient(135deg,#0984e3,#0652aa)',
                 color:isAIThinking?'#555':'#fff', border:'none', borderRadius:8,
-                padding:'12px 28px', fontSize:14, fontWeight:'bold', cursor:isAIThinking?'not-allowed':'pointer',
+                padding:'11px 28px 10px', fontSize:14, fontWeight:'bold', cursor:isAIThinking?'not-allowed':'pointer',
                 boxShadow:isAIThinking?'none':'0 2px 8px rgba(9,132,227,0.4)',
               }}>
                 {phase===TURN_PHASE.END?T('턴 종료 →','End Turn →'):T('다음 페이즈 →','Next Phase →')}
