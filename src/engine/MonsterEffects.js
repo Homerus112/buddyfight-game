@@ -423,6 +423,17 @@ export function parseEnterEffect(text = '') {
   if (/when\s+this\s+card\s+is\s+(?:called|placed)/i.test(text)) effect.onCallTrigger = true;
   // 소환 조건 (you may only call this card if)
   if (/you\s+may\s+only\s+call\s+this\s+card\s+if/i.test(text)) effect.callCondition = true;
+  if (/you\s+cannot\s+call\s+this\s+card\s+to\s+the\s+center/i.test(text)) effect.noCenterCall = true;
+  // ✅ fix74: 추가 인식 패턴
+  if (/at\s+the\s+end\s+of\s+(?:the\s+)?battle.*?(?:attacked|this\s+card)/i.test(text)) { effect.battleEndTrigger = true; }
+  if (/if\s+you\s+have\s+(?:an?\s+)?item\s+equipped/i.test(text)) effect.requireItemEquipped = true;
+  if (/if\s+you\s+have\s+\d+\s+life\s+or\s+less/i.test(text)) effect.lifeCondEffect = true;
+  if (/when\s+the\s+attack.*?nullifi/i.test(text)) effect.attackNullifiedTrigger = true;
+  if (/shadow\s+dive/i.test(text) && !effect.shadowDive) effect.shadowDive = true;
+  if (/can\s+attack.*?(?:even\s+if|regardless)/i.test(text)) effect.ignoreCenter = true;
+  if (/when\s+you\s+equip\s+this\s+card/i.test(text)) effect.onEquipTrigger = true;
+  if (/damage.*?reduced\s+by|reduce.*?damage/i.test(text)) effect.damageReduce = true;
+  if (/(?:stand|rest)\s+(?:this\s+card|a\s+monster|all)/i.test(text)) { if (!effect.standSelf) effect.standCard = true; }
   // soul trigger (when soul is put from X)
   if (/when\s+(?:a\s+)?soul\s+is\s+put\s+from/i.test(text)) effect.soulFromTrigger = true;
   // deck drop call (when put from deck into drop)
@@ -457,6 +468,14 @@ export function parseEnterEffect(text = '') {
   if (/size\s+of\s+this\s+card.*?(?:reduce|lower|decreas)/i.test(text)) effect.sizeReduce = true;
   // when card put into zone trigger
   if (/when\s+(?:this\s+card|a\s+card|cards?)\s+(?:is\s+)?(?:put|enters?)\s+(?:into|to)\s+(?:your\s+)?(?:gauge|drop|soul)/i.test(text)) effect.zoneEnterTrigger = true;
+
+  // ✅ fix74-2: 추가 인식 패턴
+  if (/\[Equip\s+Cost\]/i.test(text)) effect.equipped = true;  // 아이템 기본 인식
+  if (/this\s+card\s+gets\s+critical\s+equal\s+to/i.test(text)) effect.critEqualTo = true;
+  if (/at\s+the\s+beginning\s+of\s+your\s+final\s+phase/i.test(text)) { effect.phase = 'final'; effect.autoTrigger = true; }
+  if (/you'?ve?\s+become\s+a\s+buddyfight/i.test(text)) effect.special = true;
+  if (/you\s+may\s+have\s+up\s+to\s+(?:one|\d+)\s+"[^"]+"/i.test(text)) effect.deckLimit = true;
+  if (/if\s+(?:there\s+are|you\s+have)\s+(?:three|\d+)\s+or\s+more\s+cards\s+in\s+your\s+opponent/i.test(text)) effect.oppDropCondition = true;
 
   // [Transform] 처리
   if (/\[Transform\]/i.test(text)) {

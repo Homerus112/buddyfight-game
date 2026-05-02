@@ -169,14 +169,14 @@ export function doStandPhase(state) {
 export function doDrawPhase(state) {
   const ap = state.activePlayer;
   if (state.isFirstTurn && ap === 'player')
-    return { ...state, log: [...state.log, '첫 턴 드로우 불가!'] };
+    return { ...state, log: [...state.log, L('첫 턴 드로우 불가!','1st Turn: No Draw!')] };
   const p = state[ap];
   if (p.deck.length === 0)
-    return { ...state, winner: ap==='player'?'ai':'player', log: [...state.log, `[${ap}] 덱 아웃!`] };
+    return { ...state, winner: ap==='player'?'ai':'player', log: [...state.log, L(`[${ap==='player'?'나':'AI'}] 덱 아웃!`,`[${ap==='player'?'Me':'AI'}] Deck Out!`)] };
   return {
     ...state,
     [ap]: { ...p, deck: p.deck.slice(1), hand: [...p.hand, p.deck[0]] },
-    log: [...state.log, `[${ap==='player'?'나':'AI'}] ② 드로우`],
+    log: [...state.log, L(`[${ap==='player'?'나':'AI'}] ② 드로우`,`[${ap==='player'?'Me':'AI'}] ② Draw`)],
   };
 }
 
@@ -203,19 +203,19 @@ export function chargeFromHand(state, instanceId) {
   return {
     ...state,
     player: { ...p, hand: newHand, gauge: newGauge },
-    log: [...state.log, `[나] ${card.name} → 게이지 ⚡${newGauge.length}`],
+    log: [...state.log, L(`[나] ${card.name} → 게이지 ⚡${newGauge.length}`,`[Me] ${card.name} → Gauge ⚡${newGauge.length}`)],
   };
 }
 
 // 플레이어용: 덱에서 1장 드로우
 export function drawOne(state) {
   const p = state.player;
-  if (p.deck.length === 0) return { ...state, log: [...state.log, '덱이 비어 드로우 불가'] };
+  if (p.deck.length === 0) return { ...state, log: [...state.log, L('덱이 비어 드로우 불가','Deck is empty!')] };
   const drawn = p.deck[0];
   return {
     ...state,
     player: { ...p, deck: p.deck.slice(1), hand: [...p.hand, drawn] },
-    log: [...state.log, `[나] 드로우 🃏${p.hand.length + 1}`],
+    log: [...state.log, L(`[나] 드로우 🃏${p.hand.length + 1}`,`[Me] Draw 🃏${p.hand.length + 1}`)],
   };
 }
 
@@ -228,7 +228,7 @@ export function callMonster(state, instanceId, zone) {
   if (card.type !== CARD_TYPE.MONSTER) return state;
   // 선공 첫 턴: 몬스터 1마리 제한 (플레이어+AI 모두)
   if (state.isFirstTurn && state.firstTurnMonsterCount >= 1)
-    return { ...state, log: [...state.log, '❌ 첫 턴에는 몬스터 1마리만 소환 가능!'] };
+    return { ...state, log: [...state.log, L('❌ 첫 턴에는 몬스터 1마리만 소환 가능!','❌ 1st Turn: Only 1 monster allowed!')] };
   // 소환 코스트 체크 (플레이어+AI 모두)
   const callCost = parseCost(card.text);
   if (callCost) {
@@ -305,7 +305,7 @@ export function callMonster(state, instanceId, zone) {
              drop: oldCard ? [...finalP2.drop, oldCard] : finalP2.drop },
     firstTurnMonsterCount: state.isFirstTurn ? (state.firstTurnMonsterCount||0)+1 : state.firstTurnMonsterCount,
     buddyCallPopup: isBuddyCall ? card.name : null,
-    log: [...state.log, ...buddyLog, `[${ap==='player'?'나':'AI'}] ${card.name} → ${zone}${costLog}${soulCards.length?` 소울+${soulCards.length}`:''} (Sz합계${newSize})`],
+    log: [...state.log, ...buddyLog, L(`[${ap==='player'?'나':'AI'}] ${card.name} → ${zone}${costLog}${soulCards.length?` 소울+${soulCards.length}`:''} (Sz:${newSize})`,`[${ap==='player'?'Me':'AI'}] ${card.name} → ${zone}${costLog}${soulCards.length?` Soul+${soulCards.length}`:''} (Sz:${newSize})`)],
   };
 
   // ✅ fix68: Ride 효과 처리 - [Ride]로 소환 시 기존 카드 위에 탑승
@@ -318,7 +318,7 @@ export function callMonster(state, instanceId, zone) {
       ...result,
       [ap]: { ...result[ap], field: { ...result[ap].field, [zone]: rideCard },
         drop: result[ap].drop.filter(c => c.instanceId !== oldCard.instanceId) },
-      log: [...result.log, `🏇 Ride! ${oldCard.name} → ${card.name}의 소울`],
+      log: [...result.log, L(`🏇 Ride! ${oldCard.name} → ${card.name} Soul`,`🏇 Ride! ${oldCard.name} → ${card.name} Soul`)],
       // Ride 상태 추적
       _ridePairs: { ...(state._ridePairs||{}), [ap]: { rider: card.id, ridden: oldCard.id, zone } },
     };
@@ -342,7 +342,7 @@ export function equipItem(state, instanceId) {
   if (card.type !== CARD_TYPE.ITEM) return state;
   // 선공 첫 턴: 아이템 포함 1회 제한 (플레이어+AI 모두)
   if (state.isFirstTurn && (state.firstTurnMonsterCount || 0) >= 1)
-    return { ...state, log: [...state.log, '❌ 첫 턴에는 몬스터/아이템 합쳐 1회만!'] };
+    return { ...state, log: [...state.log, L('❌ 첫 턴에는 몬스터/아이템 합쳐 1회만!','❌ 1st Turn: Only 1 call allowed!')] };
   // 장착 코스트 체크
   if (ap === 'player') {
     const cost = parseCost(card.text);
@@ -381,7 +381,7 @@ export function equipItem(state, instanceId) {
       drop: p.item ? [...finalP2.drop, p.item] : finalP2.drop },
     buddyCallPopup: isItemBuddyCall ? card.name : null,
     firstTurnMonsterCount: state.isFirstTurn ? (state.firstTurnMonsterCount||0)+1 : state.firstTurnMonsterCount,
-    log: [...state.log, ...buddyLog2, `[${ap==='player'?'나':'AI'}] ${card.name} 장착`],
+    log: [...state.log, ...buddyLog2, L(`[${ap==='player'?'나':'AI'}] ${card.name} 장착`,`[${ap==='player'?'Me':'AI'}] ${card.name} equipped`)],
   };
   // 비공격 데미지 감소 아이템 효과 설정
   if (/damage.*?(?:other than|except).*?attacks?.*?reduc|damage dealt to you.*?(?:other|except).*?reduc/i.test(card.text||'')) {
@@ -405,7 +405,7 @@ export function declareAttack(state, attackerZone) {
   // 아이템: 내 센터에 몬스터가 없어야 공격 가능 (특수 아이템 제외)
   if (attackerZone === 'item' && ap === 'player') {
     if (p.field.center) {
-      return { ...state, log: [...state.log, `❌ 아이템은 센터에 몬스터가 없을 때만 공격 가능`] };
+      return { ...state, log: [...state.log, L('❌ 아이템은 센터에 몬스터가 없을 때만 공격 가능','❌ Item can only attack without center monster')] };
     }
   }
 

@@ -49,7 +49,7 @@ function CallCostConfirm({ card, zone, player, onConfirm, onCancel }) {
       <div style={{background:'#1a1a2e',borderRadius:12,border:'1px solid #6c5ce7',padding:'18px 22px',maxWidth:400,width:'100%'}}>
         <div style={{fontSize:14,fontWeight:'bold',color:'#a29bfe',marginBottom:10}}>소환 코스트 확인</div>
         <div style={{display:'flex',gap:10,marginBottom:12,alignItems:'flex-start'}}>
-          <img src={`/cards/n${card.id}.png`} alt="" style={{width:64,height:90,borderRadius:6,objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>
+          <img src={`/cards/n${card.id}.png`} alt="" style={{width:65,height:110,borderRadius:6,objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>
           <div>
             <div style={{fontSize:13,fontWeight:'bold',color:'#ffd700',marginBottom:3}}>{card.name}</div>
             <div style={{fontSize:10,color:'#81ecec',marginBottom:5}}>{typeMap[card.type]} {card.size!=null?`· Size ${card.size}`:''}</div>
@@ -285,10 +285,11 @@ function FlagBuddyArea({ p }) {
 }
 
 // ── 스탯 바 ───────────────────────────────────────
-function Stats({ p, label, isActive }) {
+function Stats({ p, label, isActive, T: TFn }) {
+  const t = TFn || ((ko) => ko);
   return (
     <div style={{display:'flex',gap:10,alignItems:'center',padding:'5px 12px',background:isActive?'rgba(255,215,0,0.08)':'rgba(255,255,255,0.04)',borderRadius:8,border:`1px solid ${isActive?'#ffd700':'#333'}`,fontSize:12}}>
-      <span style={{color:'#aaa'}}>{label}</span>
+      <span style={{color:isActive?'#ffd700':'#aaa',fontWeight:isActive?'bold':'normal'}}>{label}</span>
       <span style={{color:'#ff6b6b'}}>❤️{p.life}</span>
       <span style={{color:'#ffd700'}}>⚡{p.gauge.length}</span>
       <span style={{color:'#74b9ff'}}>📚{p.deck.length}</span>
@@ -1037,7 +1038,7 @@ reMatch ? reMatch() : goToMenu();
         borderBottom:'1px solid rgba(255,255,255,0.06)', flexShrink:0,
       }}>
         <div style={{display:'flex',gap:10,alignItems:'center'}}>
-          <button onClick={goToMenu} style={{background:'rgba(255,255,255,0.07)',color:'#888',border:'1px solid rgba(255,255,255,0.1)',borderRadius:6,padding:'3px 10px',cursor:'pointer',fontSize:11}}>← 메뉴</button>
+          <button onClick={goToMenu} style={{background:'rgba(255,255,255,0.07)',color:'#888',border:'1px solid rgba(255,255,255,0.1)',borderRadius:6,padding:'3px 10px',cursor:'pointer',fontSize:11}}>← {T('메뉴','Menu')}</button>
           <button onClick={bgmToggle} title={bgmState.title||'BGM'} style={{background:bgmState.playing?'rgba(255,215,0,0.1)':'rgba(255,255,255,0.05)',color:bgmState.playing?'#ffd700':'#555',border:`1px solid ${bgmState.playing?'rgba(255,215,0,0.3)':'rgba(255,255,255,0.08)'}`,borderRadius:6,padding:'3px 8px',cursor:'pointer',fontSize:13}}>{bgmState.playing?'🎵':'🔇'}</button>
           <button onClick={bgmNext} title="다음 곡" style={{background:'rgba(255,255,255,0.05)',color:'#888',border:'1px solid rgba(255,255,255,0.08)',borderRadius:6,padding:'3px 8px',cursor:'pointer',fontSize:13}}>⏭</button>
           <span style={{color:'#c8a96e',fontWeight:'bold',fontSize:13}}>Turn {turn}</span>
@@ -1049,9 +1050,9 @@ reMatch ? reMatch() : goToMenu();
           {linkMode&&<span style={{color:'#a29bfe',fontSize:11,fontWeight:'bold'}}>🔗 {T('링크어택','Link Atk')} {linkQueue.length}{T('장','')}</span>}
         </div>
         <div style={{display:'flex',gap:16,alignItems:'center'}}>
-          <Stats p={ai} label="AI" isActive={!isMyTurn}/>
+          <Stats p={ai} label={T("AI","AI")} isActive={!isMyTurn} T={T}/>
           <div style={{width:1,height:24,background:'rgba(255,255,255,0.1)'}}/>
-          <Stats p={player} label="나" isActive={isMyTurn}/>
+          <Stats p={player} label={T("나","Me")} isActive={isMyTurn} T={T}/>
         </div>
       </div>
 
@@ -1104,15 +1105,11 @@ reMatch ? reMatch() : goToMenu();
 
           {/* ── AI 필드 ── */}
           <div style={{
-            flex:'0 0 auto', minHeight:170, display:'flex', flexDirection:'column', justifyContent:'center',
+            flex:'0 0 auto', minHeight:191, display:'flex', flexDirection:'column', justifyContent:'center',
             background:'linear-gradient(180deg,rgba(180,60,60,0.06) 0%,transparent 100%)',
             borderBottom:'2px solid rgba(255,255,255,0.07)', padding:'6px 12px', gap:4,
           }}>
-            {/* AI 상태 표시 */}
-            <div style={{display:'flex',justifyContent:'flex-end',alignItems:'center',gap:6}}>
-              <span style={{fontSize:10,color:'#ff8888',opacity:0.7}}>🤖 AI</span>
-              {!isMyTurn&&!winner&&<span style={{fontSize:10,color:'#fd79a8',background:'rgba(253,121,168,0.15)',padding:'1px 8px',borderRadius:10,border:'1px solid rgba(253,121,168,0.3)'}}>공격 중</span>}
-            </div>
+
 
             {/* AI 필드 존들 - 거꾸로 배치 (상대 시점) */}
             <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
@@ -1153,6 +1150,18 @@ reMatch ? reMatch() : goToMenu();
             </div>
           </div>
 
+          {/* ── AI 상태 바 (29px) ── */}
+          <div style={{
+            height:29, display:'flex', alignItems:'center', justifyContent:'center',
+            background:'rgba(0,0,0,0.4)', gap:16, flexShrink:0,
+            borderTop:'1px solid rgba(255,255,255,0.05)',
+          }}>
+            <span style={{fontSize:10,color:'#ff8888',opacity:0.7}}>🤖 {T('AI','AI')}</span>
+            {!isMyTurn&&!winner&&<span style={{fontSize:10,color:'#fd79a8',background:'rgba(253,121,168,0.15)',padding:'1px 8px',borderRadius:10,border:'1px solid rgba(253,121,168,0.3)'}}>
+              {T('AI 공격 중','AI Attacking')}
+            </span>}
+          </div>
+
           {/* ── 중앙 배틀라인 ── */}
           <div style={{
             height:28, display:'flex', alignItems:'center', justifyContent:'center',
@@ -1169,7 +1178,7 @@ reMatch ? reMatch() : goToMenu();
 
           {/* ── 플레이어 필드 ── */}
           <div style={{
-            flex:'0 0 auto', minHeight:170, display:'flex', flexDirection:'column', justifyContent:'center',
+            flex:'0 0 auto', minHeight:177, display:'flex', flexDirection:'column', justifyContent:'center',
             background:'linear-gradient(0deg,rgba(60,130,180,0.06) 0%,transparent 100%)',
             borderTop:'2px solid rgba(255,255,255,0.07)', padding:'6px 12px', gap:4,
           }}>
@@ -1245,17 +1254,25 @@ reMatch ? reMatch() : goToMenu();
               </div>
             </div>
 
-            {/* 플레이어 상태 표시 - ✅ fix70: 원래 크기 */}
-            <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',gap:6}}>
-              {isMyTurn&&!winner&&<span style={{fontSize:10,color:'#74b9ff',opacity:0.7}}>🎮 {T('내 턴','My Turn')}</span>}
-              {isFirstTurn&&isMyTurn&&<span style={{fontSize:10,color:'#fdcb6e',background:'rgba(253,203,110,0.1)',padding:'1px 8px',borderRadius:10,border:'1px solid rgba(253,203,110,0.3)'}}>⚠ {T('첫 턴','1st Turn')}</span>}
-            </div>
+
+          </div>
+
+          {/* ── 플레이어 상태 바 (My Turn 표시, 29px와 유사) ── */}
+          <div style={{
+            display:'flex', alignItems:'center', justifyContent:'flex-start', gap:8,
+            padding:'4px 10px', background:'rgba(0,0,0,0.35)',
+            borderTop:'1px solid rgba(255,255,255,0.05)', flexShrink:0,
+          }}>
+            <span style={{fontSize:10,color:'#74b9ff',opacity:isMyTurn?0.9:0.3,fontWeight:isMyTurn?'bold':'normal'}}>
+              🎮 {T('내 턴','My Turn')}
+            </span>
+            {isFirstTurn&&isMyTurn&&<span style={{fontSize:10,color:'#fdcb6e',background:'rgba(253,203,110,0.1)',padding:'1px 8px',borderRadius:10,border:'1px solid rgba(253,203,110,0.3)'}}>⚠ {T('첫 턴','1st Turn')}</span>}
           </div>
 
           {/* ── 손패 영역 ── */}
           <div style={{
             background:'rgba(0,0,0,0.5)', borderTop:'1px solid rgba(255,255,255,0.06)',
-            padding:'5px 10px 6px', flexShrink:0,
+            padding:'4px 10px', flexShrink:0,
           }}>
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4,flexWrap:'wrap'}}>
               <span style={{fontSize:10,color:'rgba(162,155,254,0.8)'}}>🃏 손패 {player.hand.length}장</span>

@@ -717,6 +717,24 @@ export function parseSpellEffect(text = '') {
   if (/put\s+(?:one|up\s+to\s+one)\s+from\s+among\s+them\s+into\s+your\s+hand/i.test(effectText)) effect.deckToHand = true;
   // "Choose up to one size X and ... from drop zone, put into hand" (Black Revenger, Edict)
   if (/choose\s+up\s+to\s+one\s+size\s+\d+.*?(?:drop\s+zone|drop).*?(?:put\s+them|into\s+your\s+hand)/i.test(effectText)) effect.deckToHand = true;
+  // ✅ fix74: 추가 인식 패턴 - 미인식 카드들
+  if (/rock.?paper.?scissors|janken/i.test(effectText)) effect.rockPaperScissors = true;
+  if (/can\s+attack.*?(?:even\s+if|regardless)/i.test(effectText)) effect.ignoreCenter = true;
+  if (/damage.*?(?:reduced?|lower).*?by\s+\d+|reduce.*?\d+.*?damage/i.test(effectText)) effect.damageReduce = true;
+  if (/(?:stand|rest)\s+(?:all|a|the|this)\s+(?:card|monster)/i.test(effectText)) effect.standCard = true;
+  if (/at\s+the\s+end\s+of.*?battle/i.test(effectText)) effect.battleEndTrigger = true;
+  if (/you\s+may\s+only\s+cast.*?if\s+you\s+have.*?life/i.test(effectText)) effect.castCondition = true;
+  if (/put\s+(?:it|this)\s+(?:on\s+the\s+top|at\s+the\s+bottom|on\s+top\s+or)/i.test(effectText)) effect.deckManipulate = true;
+  if (/top\s+or\s+bottom.*?deck/i.test(effectText)) effect.deckManipulate = true;
+  if (/from\s+his\s+or\s+her\s+(?:drop|deck|hand)/i.test(effectText)) effect.opponentEffect = true;
+  // ✅ fix74-2: 추가 인식
+  if (/choose\s+(?:two|three|\d+)\s+(?:size\s+\d+|«[^»]+»)/i.test(effectText)) effect.multiCall = true;
+  if (/call\s+them\s+on\s+separate\s+areas/i.test(effectText)) effect.multiCall = true;
+  if (/move\s+a\s+(?:size\s+\d+\s+or\s+less\s+)?monster.*?to\s+the\s+open/i.test(effectText)) effect.moveMonster = true;
+  if (/draw\s+cards\s+equal\s+to\s+the\s+number/i.test(effectText)) effect.drawEqualTo = true;
+  if (/\[Transform\]/i.test(effectText)) effect.transformSpell = true;
+  if (/put\s+(?:two|three|\d+)\s+cards?\s+from\s+the\s+top.*?into.*?(?:drop|gauge)/i.test(effectText)) effect.deckToDrop = true;
+  if (/if\s+your\s+life\s+is\s+1/i.test(effectText)) effect.lifeCondEffect = true;
 
   return Object.keys(effect).length > 0 ? effect : null;
 }
