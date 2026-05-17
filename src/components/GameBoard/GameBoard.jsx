@@ -49,7 +49,7 @@ function CallCostConfirm({ card, zone, player, onConfirm, onCancel }) {
       <div style={{background:'#1a1a2e',borderRadius:12,border:'1px solid #6c5ce7',padding:'18px 22px',maxWidth:400,width:'100%'}}>
         <div style={{fontSize:14,fontWeight:'bold',color:'#a29bfe',marginBottom:10}}>소환 코스트 확인</div>
         <div style={{display:'flex',gap:10,marginBottom:12,alignItems:'flex-start'}}>
-          <img src={`/cards/n${card.id}.png`} alt="" style={{width:65,height:110,borderRadius:6,objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>
+          <img src={`/cards/n${card.id}.png`} alt="" style={{width:65,height:105,borderRadius:6,objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>
           <div>
             <div style={{fontSize:13,fontWeight:'bold',color:'#ffd700',marginBottom:3}}>{card.name}</div>
             <div style={{fontSize:10,color:'#81ecec',marginBottom:5}}>{typeMap[card.type]} {card.size!=null?`· Size ${card.size}`:''}</div>
@@ -269,14 +269,14 @@ function FlagBuddyArea({ p }) {
       {/* 플래그 */}
       <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
         <div style={{fontSize:8,color:'#aaa',letterSpacing:0.5}}>플래그</div>
-        <div onClick={()=>p.flag&&setShowFlag(true)} style={{width:72,height:100,borderRadius:6,border:'1px solid #ffd70055',background:'#1a1a3e',overflow:'hidden',cursor:p.flag?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <div onClick={()=>p.flag&&setShowFlag(true)} style={{width:65,height:105,borderRadius:6,border:'1px solid #ffd70055',background:'#1a1a3e',overflow:'hidden',cursor:p.flag?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center'}}>
           {p.flag?<img src={`/cards/n${p.flag.id}.png`} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>:<span style={{color:'#555',fontSize:9}}>없음</span>}
         </div>
       </div>
       {/* 버디존 */}
       <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
         <div style={{fontSize:8,color:'#aaa',letterSpacing:0.5}}>버디존</div>
-        <div onClick={()=>p.buddy&&setShowBuddy(true)} style={{width:72,height:100,borderRadius:6,border:'1px dashed #ffd70044',background:'rgba(255,215,0,0.04)',overflow:'hidden',cursor:p.buddy?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <div onClick={()=>p.buddy&&setShowBuddy(true)} style={{width:65,height:105,borderRadius:6,border:'1px dashed #ffd70044',background:'rgba(255,215,0,0.04)',overflow:'hidden',cursor:p.buddy?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center'}}>
           {p.buddy?<img src={`/cards-mini/n${p.buddy.id}.png`} alt="" style={{width:'100%',height:'100%',objectFit:'cover',opacity:0.7}} onError={e=>{e.target.style.display='none';}}/>:<span style={{color:'#555',fontSize:9}}>버디존</span>}
         </div>
       </div>
@@ -1111,6 +1111,12 @@ reMatch ? reMatch() : goToMenu();
           }}>
 
 
+            {/* AI 상태 표시 - 우상단 */}
+            <div style={{display:'flex',justifyContent:'flex-end',alignItems:'center',gap:6}}>
+              <span style={{fontSize:10,color:'#ff8888',opacity:0.7}}>🤖 AI</span>
+              {!isMyTurn&&!winner&&<span style={{fontSize:10,color:'#fd79a8',background:'rgba(253,121,168,0.15)',padding:'1px 8px',borderRadius:10,border:'1px solid rgba(253,121,168,0.3)'}}>공격 중</span>}
+            </div>
+
             {/* AI 필드 존들 - 거꾸로 배치 (상대 시점) */}
             <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
               {/* Flag/Buddy */}
@@ -1121,7 +1127,7 @@ reMatch ? reMatch() : goToMenu();
               {/* Item */}
               <div onClick={()=>attackingCard&&playResolveAttack('item')}
                 style={{
-                  width:72,height:100,borderRadius:6,overflow:'hidden',
+                  width:65,height:105,borderRadius:6,overflow:'hidden',
                   border:`2px solid ${attackingCard?'rgba(255,68,68,0.8)':'rgba(255,255,255,0.12)'}`,
                   display:'flex',alignItems:'center',justifyContent:'center',
                   cursor:attackingCard?'pointer':'default',
@@ -1148,18 +1154,6 @@ reMatch ? reMatch() : goToMenu();
                 </button>
               )}
             </div>
-          </div>
-
-          {/* ── AI 상태 바 (29px) ── */}
-          <div style={{
-            height:29, display:'flex', alignItems:'center', justifyContent:'center',
-            background:'rgba(0,0,0,0.4)', gap:16, flexShrink:0,
-            borderTop:'1px solid rgba(255,255,255,0.05)',
-          }}>
-            <span style={{fontSize:10,color:'#ff8888',opacity:0.7}}>🤖 {T('AI','AI')}</span>
-            {!isMyTurn&&!winner&&<span style={{fontSize:10,color:'#fd79a8',background:'rgba(253,121,168,0.15)',padding:'1px 8px',borderRadius:10,border:'1px solid rgba(253,121,168,0.3)'}}>
-              {T('AI 공격 중','AI Attacking')}
-            </span>}
           </div>
 
           {/* ── 중앙 배틀라인 ── */}
@@ -1196,7 +1190,7 @@ reMatch ? reMatch() : goToMenu();
               {/* Item */}
               <div onClick={onMyItemClick}
                 style={{
-                  width:72,height:100,borderRadius:6,overflow:'hidden',
+                  width:65,height:105,borderRadius:6,overflow:'hidden',
                   border:`2px solid ${selIsItem&&isMain?'rgba(255,215,0,0.8)':isAttack&&player.item?.state===CARD_STATE.STAND?'rgba(255,107,107,0.8)':'rgba(255,255,255,0.12)'}`,
                   display:'flex',alignItems:'center',justifyContent:'center',
                   cursor:'pointer', background:'rgba(255,255,255,0.03)',
@@ -1254,19 +1248,11 @@ reMatch ? reMatch() : goToMenu();
               </div>
             </div>
 
-
-          </div>
-
-          {/* ── 플레이어 상태 바 (My Turn 표시, 29px와 유사) ── */}
-          <div style={{
-            display:'flex', alignItems:'center', justifyContent:'flex-start', gap:8,
-            padding:'4px 10px', background:'rgba(0,0,0,0.35)',
-            borderTop:'1px solid rgba(255,255,255,0.05)', flexShrink:0,
-          }}>
-            <span style={{fontSize:10,color:'#74b9ff',opacity:isMyTurn?0.9:0.3,fontWeight:isMyTurn?'bold':'normal'}}>
-              🎮 {T('내 턴','My Turn')}
-            </span>
-            {isFirstTurn&&isMyTurn&&<span style={{fontSize:10,color:'#fdcb6e',background:'rgba(253,203,110,0.1)',padding:'1px 8px',borderRadius:10,border:'1px solid rgba(253,203,110,0.3)'}}>⚠ {T('첫 턴','1st Turn')}</span>}
+            {/* 플레이어 상태 표시 - 좌하단 */}
+            <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',gap:6}}>
+              {isMyTurn&&!winner&&<span style={{fontSize:10,color:'#74b9ff',opacity:0.7}}>🎮 {T('내 턴','My Turn')}</span>}
+              {isFirstTurn&&isMyTurn&&<span style={{fontSize:10,color:'#fdcb6e',background:'rgba(253,203,110,0.1)',padding:'1px 8px',borderRadius:10,border:'1px solid rgba(253,203,110,0.3)'}}>⚠ {T('첫 턴','1st Turn')}</span>}
+            </div>
           </div>
 
           {/* ── 손패 영역 ── */}
@@ -1293,7 +1279,7 @@ reMatch ? reMatch() : goToMenu();
           {/* ── 컨트롤 버튼 ── ✅ fix73: 하단 패딩 최소화 */}
           <div style={{
             background:'rgba(0,0,0,0.6)', borderTop:'1px solid rgba(255,255,255,0.05)',
-            padding:'3px 8px 0px', display:'flex', gap:5, flexWrap:'wrap', justifyContent:'center', flexShrink:0,
+            padding:'4px 8px 0px', display:'flex', gap:5, flexWrap:'wrap', justifyContent:'center', flexShrink:0, height:48,
           }}>
             {isMyTurn&&!winner&&!attackingCard&&!chargeStep&&(
               <button onClick={() => { nextPhase(); setTimeout(() => saveGameState?.(), 300); }} disabled={isAIThinking} style={{
@@ -1301,7 +1287,7 @@ reMatch ? reMatch() : goToMenu();
                   ?'linear-gradient(135deg,#e17055,#d63031)'
                   :'linear-gradient(135deg,#0984e3,#0652aa)',
                 color:isAIThinking?'#555':'#fff', border:'none', borderRadius:8,
-                padding:'11px 28px 10px', fontSize:14, fontWeight:'bold', cursor:isAIThinking?'not-allowed':'pointer',
+                padding:'10px 0', fontSize:14, fontWeight:'bold', cursor:isAIThinking?'not-allowed':'pointer', width:'100%', maxWidth:280,
                 boxShadow:isAIThinking?'none':'0 2px 8px rgba(9,132,227,0.4)',
               }}>
                 {phase===TURN_PHASE.END?T('턴 종료 →','End Turn →'):T('다음 페이즈 →','Next Phase →')}

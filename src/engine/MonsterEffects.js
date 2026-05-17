@@ -365,7 +365,14 @@ export function parseEnterEffect(text = '') {
 
   if (/when\s+a\s+soul\s+is\s+(?:put|discarded)/i.test(text)) effect.soulTrigger = true;
   // "look at the top card of your deck"
-  if (/look\s+at\s+the\s+top\s+(?:\d+\s+)?card/i.test(text)) effect.deckLook = true;
+  const deckLookM = text.match(/look\s+at\s+the\s+top\s+(\d+|two|three|four|five)\s+cards?\s+of\s+your\s+deck[,.]?\s*(?:put\s+up\s+to\s+(?:one|\d+)\s+(?:«([^»]+)»|"([^"]+)"))?(.*?into\s+your\s+hand)?/i);
+  if (deckLookM) {
+    effect.deckLook = true;
+    const nums = {two:2,three:3,four:4,five:5};
+    effect.deckLookCount = nums[deckLookM[1]?.toLowerCase()] ?? parseInt(deckLookM[1]) ?? 3;
+    if (deckLookM[2]||deckLookM[3]) effect.deckLookKw = (deckLookM[2]||deckLookM[3]).trim();
+  }
+  if (/look\s+at\s+the\s+top\s+(?:\d+\s+)?card/i.test(text) && !effect.deckLook) effect.deckLook = true;
   // "damage dealt to you other than by attacks are reduced"
   if (/damage\s+(?:dealt|taken|received).*?(?:other\s+than|except).*?attacks?.*?reduc/i.test(text)) {
     const m = text.match(/reduced?\s+by\s+(\d+)/i);
@@ -1266,6 +1273,25 @@ export function applyActEffect(state, card, zone, ownerSide) {
       logs.push(L(`📤 ${monster.name} 드롭→필드`,`📤 ${monster.name} Drop→Field`));
     }
   }
+  // ✅ fix74: deckLook - 덱 상단 N장 보기 후 선택해서 손패/덱에 배치
+  if (effect.deckLook && p.deck.length > 0) {
+    const lookCount = effect.deckLookCount || 3;
+    const topCards = p.deck.slice(0, Math.min(lookCount, p.deck.length));
+    // 실제 게임: 플레이어가 선택 (여기서는 자동으로 처음 1장 손패)
+    // 덱 탑 N장 공개 후 조건에 맞는 카드 손패 (kw 필터 있으면 적용)
+    let picked = null;
+    if (effect.deckLookKw) {
+      picked = topCards.find(c => (c.name||'').toLowerCase().includes(effect.deckLookKw.toLowerCase()) || (c.tribe||'').toLowerCase().includes(effect.deckLookKw.toLowerCase()));
+    } else {
+      picked = topCards[0];
+    }
+    if (picked) {
+      const rest = p.deck.filter(c => c.instanceId !== picked.instanceId);
+      p = { ...p, hand: [...p.hand, picked], deck: rest };
+      logs.push(`🔍 ${card.name}: 덱 탑 ${lookCount}장 확인, ${picked.name} 손패`);
+    }
+  }
+
   // callFromDeck: 덱에서 소환 (Drum Re:B 등)
   if (effect.callFromDeck && p.deck.length > 0) {
     const kw = effect.callDeckKw?.toLowerCase();

@@ -914,6 +914,44 @@ export function castSpell(state, instanceId) {
     try {
     if (effect.nullifyAttack && state.attackingCard) { nullified = true; logs.push('🛡️ 공격 무효화!'); }
     if (effect.gainLife) { updatedP = { ...updatedP, life: Math.min(updatedP.life + effect.gainLife, 30) }; logs.push(`❤️ 라이프 +${effect.gainLife} → ${updatedP.life}`); }
+    // ✅ fix74: Rock-Paper-Scissors 이벤트
+    if (effect.rockPaperScissors) {
+      const choices = ['가위', '바위', '보'];
+      const aiChoice = choices[Math.floor(Math.random() * 3)];
+      const playerChoice = choices[Math.floor(Math.random() * 3)];
+      const winMap = {가위:'보', 바위:'가위', 보:'바위'};
+      const won = winMap[playerChoice] === aiChoice;
+      const draw2 = playerChoice === aiChoice;
+      logs.push(`✊ 가위바위보: 나(${playerChoice}) vs AI(${aiChoice}) → ${draw2 ? '비겼다!' : won ? '내가 이겼다!' : 'AI 승!'}`);
+      if (won && updatedP.deck.length > 0) {
+        const g = updatedP.deck.slice(0, Math.min(2, updatedP.deck.length));
+        updatedP = { ...updatedP, gauge: [...updatedP.gauge, ...g], deck: updatedP.deck.slice(g.length) };
+        logs.push(`⚡ 가위바위보 승: 게이지 +${g.length}`);
+      }
+    }
+    // ✅ fix74: 덱 상단 보기 (deckPeek)
+    if (effect.deckPeek && updatedP.deck.length > 0) {
+      const peekCount = effect.deckPeekCount || 1;
+      const peeked = updatedP.deck.slice(0, peekCount).map(c => c.name).join(', ');
+      logs.push(`🔍 덱 상단 ${peekCount}장: ${peeked}`);
+      // put it on top or bottom - 간단히 그대로 유지
+    }
+    // ✅ fix74: moveMonster (상대 몬스터를 좌우로 이동)
+    if (effect.moveMonster) {
+      const opZones = ['left','center','right'];
+      for (const z of opZones) {
+        if (defP.field[z]) {
+          const openZones = opZones.filter(oz => !defP.field[oz] && oz !== 'center');
+          if (openZones.length > 0) {
+            const card2 = defP.field[z];
+            const newZ = openZones[0];
+            defP = { ...defP, field: { ...defP.field, [z]: null, [newZ]: card2 } };
+            logs.push(`↔️ ${card2.name}: ${z} → ${newZ} 이동`);
+            break;
+          }
+        }
+      }
+    }
     if (effect.damage) {
     const _reduce = updatedP.item?._nonAttackReduce || 0;
     const _actualDmg = Math.max(0, effect.damage - _reduce);
